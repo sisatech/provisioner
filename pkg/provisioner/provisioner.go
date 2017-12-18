@@ -3,8 +3,8 @@ package provisioner
 import (
 	"io"
 
-	"github.com/sisatech/provision/pkg/google"
-	"github.com/sisatech/provision/pkg/vmware"
+	"github.com/sisatech/provisioner/pkg/google"
+	"github.com/sisatech/provisioner/pkg/vmware"
 )
 
 // Provisioner ...
