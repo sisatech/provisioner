@@ -2,8 +2,14 @@ package microsoft
 
 import (
 	"bytes"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
+	"fmt"
 	"io"
 	"io/ioutil"
+	"net/http"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/storage"
 )
@@ -12,6 +18,55 @@ import (
 type Provisioner struct {
 	cfg  *Config
 	blob *storage.Blob
+}
+
+// Creates a sha256 hash of the string msg, with the key secretKey
+func signSha256(secretKey string, msg string) string {
+	dec, _ := base64.StdEncoding.DecodeString(secretKey)
+	key := []byte(dec)
+	h := hmac.New(sha256.New, key)
+	h.Write([]byte(msg))
+	return base64.StdEncoding.EncodeToString(h.Sum(nil))
+}
+
+// Creates a container within a blob
+func createContainer(cfg *Config) error {
+	// Create signature
+	url := "https://" + cfg.StorageAccount + ".blob.core.windows.net/" + cfg.Container + "?restype=container"
+	version := "2016-05-31"
+	date := time.Now().UTC().Format("Mon, 02 Jan 2006 15:04:05 GMT")
+	parameters := "\nrestype:container"
+
+	canonicalizedHeaders := "x-ms-date:" + date + "\nx-ms-version:" + version
+	canonicalizedResources := "/" + cfg.StorageAccount + "/" + cfg.Container + parameters
+
+	verb := "PUT"
+	stringToSign := verb + "\n\n\n\n\n\n\n\n\n\n\n\n" + canonicalizedHeaders + "\n" + canonicalizedResources
+
+	signature := signSha256(cfg.StorageKey, stringToSign)
+
+	// Create Container
+	req, err := http.NewRequest(verb, url, nil)
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("x-ms-date", date)
+	req.Header.Set("x-ms-version", version)
+	req.Header.Set("Authorization", "SharedKey mystorageaccountsisatech:"+signature)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode > 201 {
+		return fmt.Errorf("bad status code %d", resp.StatusCode)
+	}
+
+	return nil
 }
 
 // NewClient ...
@@ -25,6 +80,10 @@ func NewClient(cfg *Config) (*Provisioner, error) {
 	}
 
 	blobCli := client.GetBlobService()
+	err = createContainer(cfg)
+	if err != nil && err.Error() != fmt.Errorf("bad status code 409").Error() {
+		return nil, err
+	}
 	cnt := blobCli.GetContainerReference(cfg.Container)
 	blob := cnt.GetBlobReference(cfg.PageBlob)
 
