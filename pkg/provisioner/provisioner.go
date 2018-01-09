@@ -4,6 +4,7 @@ import (
 	"io"
 
 	"github.com/sisatech/provisioner/pkg/google"
+	"github.com/sisatech/provisioner/pkg/microsoft"
 	"github.com/sisatech/provisioner/pkg/vmware"
 )
 
@@ -20,4 +21,9 @@ func NewGCP(bucket string, key *google.Key) (Provisioner, error) {
 // NewVMWare ...
 func NewVMWare(cfg *vmware.Config) (Provisioner, error) {
 	return vmware.NewClient(cfg)
+}
+
+// NewMicrosoft ...
+func NewMicrosoft(cfg *microsoft.Config) (Provisioner, error) {
+	return microsoft.NewClient(cfg)
 }

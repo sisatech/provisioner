@@ -1,4 +1,4 @@
-package azure
+package microsoft
 
 import (
 	"bytes"
@@ -10,25 +10,27 @@ import (
 
 // Provisioner ...
 type Provisioner struct {
+	cfg  *Config
 	blob *storage.Blob
 }
 
 // NewClient ...
-func NewClient(storageAccount string, storageKey string, container string, pageBlob string) (*Provisioner, error) {
-	c := new(Provisioner)
+func NewClient(cfg *Config) (*Provisioner, error) {
+	p := new(Provisioner)
+	p.cfg = cfg
 
-	client, err := storage.NewBasicClient(storageAccount, storageKey)
+	client, err := storage.NewBasicClient(cfg.StorageAccount, cfg.StorageKey)
 	if err != nil {
 		return nil, err
 	}
 
 	blobCli := client.GetBlobService()
-	cnt := blobCli.GetContainerReference(container)
-	blob := cnt.GetBlobReference(pageBlob)
+	cnt := blobCli.GetContainerReference(cfg.Container)
+	blob := cnt.GetBlobReference(cfg.PageBlob)
 
-	c.blob = blob
+	p.blob = blob
 
-	return c, nil
+	return p, nil
 }
 
 // Provision ...
