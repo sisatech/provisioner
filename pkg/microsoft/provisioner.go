@@ -16,8 +16,9 @@ import (
 
 // Provisioner ...
 type Provisioner struct {
-	cfg  *Config
-	blob *storage.Blob
+	cfg  *Config            // Config of the provisioner
+	blob *storage.Blob      // The blob that is uploaded
+	cnt  *storage.Container // container to upload the vhd into
 }
 
 // Creates a sha256 hash of the string msg, with the key secretKey
@@ -88,15 +89,17 @@ func NewClient(cfg *Config) (*Provisioner, error) {
 		return nil, err
 	}
 	cnt := blobCli.GetContainerReference(cfg.Container)
-	blob := cnt.GetBlobReference(cfg.PageBlob)
 
-	p.blob = blob
+	p.cnt = cnt
 
 	return p, nil
 }
 
 // Provision ...
 func (p *Provisioner) Provision(f string, r io.ReadCloser) error {
+
+	blob := p.cnt.GetBlobReference(f)
+	p.blob = blob
 
 	rBytes, err := ioutil.ReadAll(r)
 	if err != nil {
@@ -105,11 +108,11 @@ func (p *Provisioner) Provision(f string, r io.ReadCloser) error {
 	length := len(rBytes)
 
 	// blob properties
-	p.blob.Properties.ContentType = "text/plain"
-	p.blob.Properties.ContentLength = int64(length)
+	blob.Properties.ContentType = "text/plain"
+	blob.Properties.ContentLength = int64(length)
 
 	// creates blob
-	err = p.blob.PutPageBlob(nil)
+	err = blob.PutPageBlob(nil)
 	if err != nil {
 		return err
 	}
@@ -123,7 +126,7 @@ func (p *Provisioner) Provision(f string, r io.ReadCloser) error {
 			Start: uint64(i),
 			End:   uint64(i + 2097152 - 1),
 		}
-		err = p.blob.WriteRange(br, bytes.NewReader(data), nil)
+		err = blob.WriteRange(br, bytes.NewReader(data), nil)
 		if err != nil {
 			return err
 		}
@@ -135,7 +138,7 @@ func (p *Provisioner) Provision(f string, r io.ReadCloser) error {
 		Start: uint64(i),
 		End:   uint64(length) - 1,
 	}
-	err = p.blob.WriteRange(br, bytes.NewReader(data), nil)
+	err = blob.WriteRange(br, bytes.NewReader(data), nil)
 	if err != nil {
 		return err
 	}
