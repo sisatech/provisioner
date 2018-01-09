@@ -55,6 +55,7 @@ func createContainer(cfg *Config) error {
 	req.Header.Set("x-ms-version", version)
 	req.Header.Set("Authorization", "SharedKey mystorageaccountsisatech:"+signature)
 
+	// send the request
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
@@ -80,6 +81,8 @@ func NewClient(cfg *Config) (*Provisioner, error) {
 	}
 
 	blobCli := client.GetBlobService()
+
+	// attempts to create a container
 	err = createContainer(cfg)
 	if err != nil && err.Error() != fmt.Errorf("bad status code 409").Error() {
 		return nil, err
@@ -101,14 +104,17 @@ func (p *Provisioner) Provision(f string, r io.ReadCloser) error {
 	}
 	length := len(rBytes)
 
+	// blob properties
 	p.blob.Properties.ContentType = "text/plain"
 	p.blob.Properties.ContentLength = int64(length)
-	err = p.blob.PutPageBlob(nil)
 
+	// creates blob
+	err = p.blob.PutPageBlob(nil)
 	if err != nil {
 		return err
 	}
 
+	// writes data to blob - must be less than 4Mb and a multiple of 512 bytes
 	i := 0
 	for i = 0; i < (length - 2097152); i += 2097152 {
 		data := make([]byte, 2097152)
