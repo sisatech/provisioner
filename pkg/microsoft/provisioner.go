@@ -108,8 +108,11 @@ func (p *Provisioner) Provision(f string, r io.ReadCloser) error {
 	length := len(rBytes)
 
 	// blob properties
+	remainder := int64(length) % 512
+	contentLength := int64(length) + 512 - remainder
+
 	blob.Properties.ContentType = "text/plain"
-	blob.Properties.ContentLength = int64(length)
+	blob.Properties.ContentLength = contentLength
 
 	// creates blob
 	err = blob.PutPageBlob(nil)
