@@ -85,7 +85,7 @@ func NewClient(cfg *Config) (*Provisioner, error) {
 
 	// attempts to create a container
 	err = createContainer(cfg)
-	if err != nil && err.Error() != fmt.Errorf("bad status code 409").Error() {
+	if err != nil {
 		return nil, err
 	}
 	cnt := blobCli.GetContainerReference(cfg.Container)

@@ -8,24 +8,29 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 )
 
 // Provisioner ...
 type Provisioner struct {
-	bucket  *string       // aws s3 bucket name to upload the file to
-	timeout time.Duration // timeot, time to do the upload within
+	cfg         *Config                  // amazon configuration
+	credentials *credentials.Credentials // aws Credentials struct
+	bucket      *string                  // aws s3 bucket name to upload the file into
+	timeout     time.Duration            // timeot, time to do the upload within
 }
 
 // NewClient ...
-func NewClient(bucket string, timeout string) (*Provisioner, error) {
+func NewClient(cfg *Config) (*Provisioner, error) {
 	p := new(Provisioner)
-
+	p.cfg = cfg
 	var err error
 
-	p.bucket = aws.String(bucket)
-	p.timeout, err = time.ParseDuration(timeout)
+	p.credentials = credentials.NewStaticCredentials(cfg.AccessKeyId, cfg.SecretAccessKey, "")
+
+	p.bucket = aws.String(cfg.Bucket)
+	p.timeout, err = time.ParseDuration(cfg.Timeout)
 	if err != nil {
 		return nil, err
 	}
@@ -36,7 +41,10 @@ func NewClient(bucket string, timeout string) (*Provisioner, error) {
 // Provision ...
 func (p *Provisioner) Provision(f string, r io.ReadCloser) error {
 
-	sess := session.Must(session.NewSession())
+	sess := session.Must(session.NewSession(&aws.Config{
+		Region:      aws.String("us-east-1"),
+		Credentials: p.credentials,
+	}))
 	svc := s3.New(sess)
 
 	ctx := context.Background()
