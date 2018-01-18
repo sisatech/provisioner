@@ -38,7 +38,7 @@ func createInstance(svc *ec2.EC2) (*string, error) {
 }
 
 func stopInstance(svc *ec2.EC2, instanceID *string) error {
-	si, err := svc.StopInstances(&ec2.StopInstancesInput{
+	_, err := svc.StopInstances(&ec2.StopInstancesInput{
 		InstanceIds: aws.StringSlice([]string{*instanceID}),
 	})
 
@@ -81,7 +81,7 @@ func getDeviceName(svc *ec2.EC2, instanceID *string) (*string, error) {
 }
 
 func detachVolume(svc *ec2.EC2, volumeID *string) error {
-	dv, err := svc.DetachVolume(&ec2.DetachVolumeInput{
+	_, err := svc.DetachVolume(&ec2.DetachVolumeInput{
 		VolumeId: volumeID,
 	})
 
@@ -92,7 +92,7 @@ func detachVolume(svc *ec2.EC2, volumeID *string) error {
 }
 
 func deleteVolume(svc *ec2.EC2, volumeID *string) error {
-	del, err := svc.DeleteVolume(&ec2.DeleteVolumeInput{
+	_, err := svc.DeleteVolume(&ec2.DeleteVolumeInput{
 		VolumeId: volumeID,
 	})
 
@@ -177,7 +177,7 @@ func createVolume(svc *ec2.EC2, availabilityZone *string, snapshotID *string) (*
 }
 
 func deleteSnapshot(svc *ec2.EC2, snapshotID *string) error {
-	ds, err := svc.DeleteSnapshot(&ec2.DeleteSnapshotInput{
+	_, err := svc.DeleteSnapshot(&ec2.DeleteSnapshotInput{
 		SnapshotId: snapshotID,
 	})
 	if err != nil {
@@ -198,7 +198,7 @@ func waitUntilVolumeCreated(svc *ec2.EC2, volumeID *string) error {
 }
 
 func attachVolume(svc *ec2.EC2, volumeID *string, instanceID *string, deviceName *string) error {
-	av, err := svc.AttachVolume(&ec2.AttachVolumeInput{
+	_, err := svc.AttachVolume(&ec2.AttachVolumeInput{
 		VolumeId:   volumeID,
 		InstanceId: instanceID,
 		Device:     deviceName,
@@ -211,7 +211,7 @@ func attachVolume(svc *ec2.EC2, volumeID *string, instanceID *string, deviceName
 }
 
 func createImage(svc *ec2.EC2, instanceID *string, name string) error {
-	ci, err := svc.CreateImage(&ec2.CreateImageInput{
+	_, err := svc.CreateImage(&ec2.CreateImageInput{
 		InstanceId: instanceID,
 		Name:       aws.String(name),
 	})
@@ -223,7 +223,7 @@ func createImage(svc *ec2.EC2, instanceID *string, name string) error {
 }
 
 func deleteInstance(svc *ec2.EC2, instanceID *string) error {
-	ti, err := svc.TerminateInstances(&ec2.TerminateInstancesInput{
+	_, err := svc.TerminateInstances(&ec2.TerminateInstancesInput{
 		InstanceIds: aws.StringSlice([]string{*instanceID}),
 	})
 
