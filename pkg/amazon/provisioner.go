@@ -15,7 +15,8 @@ import (
 
 // Provisioner ...
 type Provisioner struct {
-	cfg         *Config                  // amazon configuration
+	cfg         *Config // amazon configuration
+	region      *string
 	credentials *credentials.Credentials // aws Credentials struct
 	bucket      *string                  // aws s3 bucket name to upload the file into
 	timeout     time.Duration            // timeot, time to do the upload within
@@ -29,6 +30,7 @@ func NewClient(cfg *Config) (*Provisioner, error) {
 
 	p.credentials = credentials.NewStaticCredentials(cfg.AccessKeyId, cfg.SecretAccessKey, "")
 
+	p.region = aws.String(cfg.Region)
 	p.bucket = aws.String(cfg.Bucket)
 	p.timeout, err = time.ParseDuration(cfg.Timeout)
 	if err != nil {
@@ -42,7 +44,7 @@ func NewClient(cfg *Config) (*Provisioner, error) {
 func (p *Provisioner) Provision(f string, r io.ReadCloser) error {
 
 	sess := session.Must(session.NewSession(&aws.Config{
-		Region:      aws.String("us-east-1"),
+		Region:      p.region,
 		Credentials: p.credentials,
 	}))
 	svc := s3.New(sess)
