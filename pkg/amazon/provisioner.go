@@ -34,7 +34,7 @@ func NewClient(cfg *Config) (*Provisioner, error) {
 	p.region = aws.String(cfg.Region)
 	p.bucket = aws.String(cfg.Bucket)
 	p.timeout, err = time.ParseDuration(cfg.Timeout)
-	p.Format = aws.String(cfg.Format)
+	p.format = aws.String(cfg.Format)
 	if err != nil {
 		return nil, err
 	}
