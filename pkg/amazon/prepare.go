@@ -234,7 +234,7 @@ func deleteInstance(svc *ec2.EC2, instanceID *string) error {
 }
 
 // Prepare ...
-func Prepare(p *Provisioner, f string, r io.ReadCloser, name string) {
+func Prepare(p *Provisioner, f string, r io.ReadCloser, name string) error {
 
 	sess := session.Must(session.NewSession(&aws.Config{
 		Region:      p.region,
