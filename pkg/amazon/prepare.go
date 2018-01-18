@@ -113,12 +113,12 @@ func waitForVolumeToDetach(svc *ec2.EC2, volumeID *string) error {
 	return nil
 }
 
-func importSnapshot(svc *ec2.EC2, bucket *string, key *string) (*string, error) {
+func importSnapshot(svc *ec2.EC2, bucket *string, key *string, format *string) (*string, error) {
 	is, err := svc.ImportSnapshot(&ec2.ImportSnapshotInput{
 		Description: aws.String("temp snapshot for " + *key),
 		DiskContainer: &ec2.SnapshotDiskContainer{
 			Description: aws.String("temp snapshot for " + *key),
-			Format:      aws.String("raw"),
+			Format:      format,
 			UserBucket: &ec2.UserBucket{
 				S3Bucket: bucket,
 				S3Key:    key,
@@ -276,7 +276,7 @@ func Prepare(p *Provisioner, f string, r io.ReadCloser, name string) error {
 		return err
 	}
 
-	importTaskID, err := importSnapshot(svc, p.bucket, aws.String(f))
+	importTaskID, err := importSnapshot(svc, p.bucket, aws.String(f), p.format)
 	if err != nil {
 		return err
 	}

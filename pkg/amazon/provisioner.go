@@ -20,6 +20,7 @@ type Provisioner struct {
 	credentials *credentials.Credentials // aws Credentials struct
 	bucket      *string                  // aws s3 bucket name to upload the file into
 	timeout     time.Duration            // timeot, time to do the upload within
+	format      *string                  // format of the disk being uploaded
 }
 
 // NewClient ...
@@ -33,6 +34,7 @@ func NewClient(cfg *Config) (*Provisioner, error) {
 	p.region = aws.String(cfg.Region)
 	p.bucket = aws.String(cfg.Bucket)
 	p.timeout, err = time.ParseDuration(cfg.Timeout)
+	p.Format = aws.String(cfg.Format)
 	if err != nil {
 		return nil, err
 	}
