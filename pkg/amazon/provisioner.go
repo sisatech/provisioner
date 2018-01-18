@@ -28,7 +28,7 @@ func NewClient(cfg *Config) (*Provisioner, error) {
 	p.cfg = cfg
 	var err error
 
-	p.credentials = credentials.NewStaticCredentials(cfg.AccessKeyId, cfg.SecretAccessKey, "")
+	p.credentials = credentials.NewStaticCredentials(cfg.AccessKeyID, cfg.SecretAccessKey, "")
 
 	p.region = aws.String(cfg.Region)
 	p.bucket = aws.String(cfg.Bucket)

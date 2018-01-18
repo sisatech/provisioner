@@ -9,7 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/ec2"
 )
 
-func createInstance(svc *ec2.EC2) (*string, err) {
+func createInstance(svc *ec2.EC2) (*string, error) {
 
 	ri, err := svc.RunInstances(&ec2.RunInstancesInput{
 		ImageId:          aws.String("ami-7dce6507"),
@@ -312,4 +312,5 @@ func Prepare(p *Provisioner, f string, r io.ReadCloser, name string) error {
 	}
 	// spawn from ami
 
+	return nil
 }
