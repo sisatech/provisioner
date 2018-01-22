@@ -23,8 +23,8 @@ type Provisioner struct {
 	format      *string                  // format of the disk being uploaded
 }
 
-// NewClient ...
-func NewClient(cfg *Config) (*Provisioner, error) {
+// NewProvisioner ...
+func NewProvisioner(cfg *Config) (*Provisioner, error) {
 	p := new(Provisioner)
 	p.cfg = cfg
 	var err error

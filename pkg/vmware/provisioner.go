@@ -32,8 +32,8 @@ type Provisioner struct {
 	}
 }
 
-// NewClient ...
-func NewClient(cfg *Config) (*Provisioner, error) {
+// NewProvisioner ...
+func NewProvisioner(cfg *Config) (*Provisioner, error) {
 
 	p := new(Provisioner)
 	p.ctx = context.TODO()

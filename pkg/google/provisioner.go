@@ -22,19 +22,19 @@ type Provisioner struct {
 	key         *Key
 }
 
-// NewClient ...
-func NewClient(bucket string, key *Key) (*Provisioner, error) {
+// NewProvisioner ...
+func NewProvisioner(bucket string, key *Key) (*Provisioner, error) {
 
-	c := new(Provisioner)
-	c.ctx = context.TODO()
-	c.bucket = bucket
-	c.key = key
+	p := new(Provisioner)
+	p.ctx = context.TODO()
+	p.bucket = bucket
+	p.key = key
 
-	err := c.auth()
+	err := p.auth()
 	if err != nil {
 		return nil, err
 	}
-	return c, nil
+	return p, nil
 }
 
 func (p *Provisioner) auth() error {
