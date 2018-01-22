@@ -8,6 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/aws/aws-sdk-go/service/s3"
 )
 
 func createInstance(svc *ec2.EC2, availabilityZone *string) (*string, error) {
@@ -273,6 +274,24 @@ func deleteInstance(svc *ec2.EC2, instanceID *string) error {
 	return nil
 }
 
+func deleteDisk(p *Provisioner, name string) error {
+	sess := session.Must(session.NewSession(&aws.Config{
+		Region:      p.region,
+		Credentials: p.credentials,
+	}))
+	svc := s3.New(sess)
+
+	_, err := svc.DeleteObject(&s3.DeleteObjectInput{
+		Bucket: p.bucket,
+		Key:    aws.String(name),
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // Prepare ...
 func (p *Provisioner) Prepare(r io.ReadCloser, name string) error {
 
@@ -359,6 +378,11 @@ func (p *Provisioner) Prepare(r io.ReadCloser, name string) error {
 		return err
 	}
 	err = deleteInstance(svc, instanceID)
+	if err != nil {
+		return err
+	}
+
+	err = deleteDisk(p, name)
 	if err != nil {
 		return err
 	}
