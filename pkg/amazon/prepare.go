@@ -10,7 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/ec2"
 )
 
-func createInstance(svc *ec2.EC2) (*string, error) {
+func createInstance(svc *ec2.EC2, availabilityZone *string) (*string, error) {
 
 	fmt.Printf("createInstance\n")
 	ri, err := svc.RunInstances(&ec2.RunInstancesInput{
@@ -18,6 +18,9 @@ func createInstance(svc *ec2.EC2) (*string, error) {
 		InstanceType: aws.String("t2.micro"),
 		MaxCount:     aws.Int64(1),
 		MinCount:     aws.Int64(1),
+		Placement: &ec2.Placement{
+			AvailabilityZone: availabilityZone,
+		},
 	})
 
 	if err != nil {
@@ -173,8 +176,8 @@ func waitUntilSnapshotImported(svc *ec2.EC2, importTaskID *string) (*string, err
 	return snapshotID, nil
 }
 
-func createVolume(svc *ec2.EC2, region *string, snapshotID *string) (*string, error) {
-	fmt.Printf("createVolume\n")
+func getAvailibityZone(svc *ec2.EC2, region *string) (*string, error) {
+	fmt.Printf("getAvailibityZone\n")
 	zones, err := svc.DescribeAvailabilityZones(&ec2.DescribeAvailabilityZonesInput{})
 
 	if err != nil {
@@ -189,6 +192,12 @@ func createVolume(svc *ec2.EC2, region *string, snapshotID *string) (*string, er
 			break
 		}
 	}
+
+	return availabilityZone, nil
+}
+
+func createVolume(svc *ec2.EC2, availabilityZone *string, snapshotID *string) (*string, error) {
+	fmt.Printf("createVolume\n")
 
 	cv, err := svc.CreateVolume(&ec2.CreateVolumeInput{
 		AvailabilityZone: availabilityZone,
@@ -273,7 +282,12 @@ func (p *Provisioner) Prepare(r io.ReadCloser, name string) error {
 	}))
 	svc := ec2.New(sess)
 
-	instanceID, err := createInstance(svc)
+	availabilityZone, err := getAvailibityZone(svc, p.region)
+	if err != nil {
+		return err
+	}
+
+	instanceID, err := createInstance(svc, availabilityZone)
 	if err != nil {
 		return err
 	}
@@ -323,7 +337,7 @@ func (p *Provisioner) Prepare(r io.ReadCloser, name string) error {
 		return err
 	}
 
-	volumeID, err = createVolume(svc, p.region, snapshotID)
+	volumeID, err = createVolume(svc, availabilityZone, snapshotID)
 	if err != nil {
 		return err
 	}
