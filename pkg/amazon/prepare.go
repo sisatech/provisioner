@@ -363,11 +363,6 @@ func (p *Provisioner) Prepare(r io.ReadCloser, name string) error {
 		return err
 	}
 
-	err = deleteVolume(svc, volumeID)
-	if err != nil {
-		return err
-	}
-
 	// check if ami exists
 	// spawn from ami
 
