@@ -7,6 +7,8 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/aws/aws-sdk-go/service/s3"
+
 	"github.com/sisatech/progress"
 )
 
@@ -101,8 +103,14 @@ func detachVolume(svc *ec2.EC2, volumeID *string) error {
 }
 
 func deleteVolume(svc *ec2.EC2, volumeID *string) error {
+
+	err := waitForVolumeToDetach(svc, volumeID)
+	if err != nil {
+		return err
+	}
+
 	// fmt.Printf("deleteVolume\n")
-	_, err := svc.DeleteVolume(&ec2.DeleteVolumeInput{
+	_, err = svc.DeleteVolume(&ec2.DeleteVolumeInput{
 		VolumeId: volumeID,
 	})
 
@@ -273,10 +281,47 @@ func deleteInstance(svc *ec2.EC2, instanceID *string) error {
 	return nil
 }
 
-// Prepare ...
+func deleteDisk(p *Provisioner, name string) error {
+	sess := session.Must(session.NewSession(&aws.Config{
+		Region:      p.region,
+		Credentials: p.credentials,
+	}))
+	svc := s3.New(sess)
+
+	_, err := svc.DeleteObject(&s3.DeleteObjectInput{
+		Bucket: p.bucket,
+		Key:    aws.String(name),
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// func cleanUp(svc *ec2.EC2) {
+// 	err = deleteVolume(svc, volumeID)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	err = deleteSnapshot(svc, snapshotID)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	err = deleteInstance(svc, instanceID)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	err = deleteDisk(p, name)
+// 	if err != nil {
+// 		return err
+// 	}
+// }
+
+// Prepare creates an AMI from a ReadCloser r and names it name
 func (p *Provisioner) Prepare(r io.ReadCloser, name string, pt progress.ProgressTracker) error {
 
-	pt.Initialize("Provisioning Virtual Machine Image.", 15, progress.UnitStep)
+	pt.Initialize("Provisioning Virtual Machine Image.", 12, progress.UnitStep)
 
 	pt.SetStage("Authenticating with Amazon servers.")
 	sess := session.Must(session.NewSession(&aws.Config{
@@ -299,6 +344,8 @@ func (p *Provisioner) Prepare(r io.ReadCloser, name string, pt progress.Progress
 		return err
 	}
 	pt.IncrementProgress(1)
+
+	defer deleteInstance(svc, instanceID)
 
 	pt.SetStage("Stopping generic VM instance.")
 	err = stopInstance(svc, instanceID)
@@ -326,11 +373,6 @@ func (p *Provisioner) Prepare(r io.ReadCloser, name string, pt progress.Progress
 	if err != nil {
 		return err
 	}
-
-	err = waitForVolumeToDetach(svc, volumeID)
-	if err != nil {
-		return err
-	}
 	pt.IncrementProgress(1)
 
 	pt.SetStage("Deleting volume.")
@@ -347,6 +389,8 @@ func (p *Provisioner) Prepare(r io.ReadCloser, name string, pt progress.Progress
 	}
 	pt.IncrementProgress(1)
 
+	defer deleteDisk(p, name)
+
 	pt.SetStage("Importing snapshot.")
 	importTaskID, err := importSnapshot(svc, p.bucket, aws.String(name), p.format)
 	if err != nil {
@@ -358,17 +402,14 @@ func (p *Provisioner) Prepare(r io.ReadCloser, name string, pt progress.Progress
 	}
 	pt.IncrementProgress(1)
 
+	defer deleteSnapshot(svc, snapshotID)
+
 	pt.SetStage("Creating volume.")
 	volumeID, err = createVolume(svc, availabilityZone, snapshotID)
 	if err != nil {
 		return err
 	}
 
-	// TODO progress tracking
-	err = deleteSnapshot(svc, snapshotID)
-	if err != nil {
-		return err
-	}
 	err = waitUntilVolumeCreated(svc, volumeID)
 	if err != nil {
 		return err
@@ -387,21 +428,6 @@ func (p *Provisioner) Prepare(r io.ReadCloser, name string, pt progress.Progress
 	if err != nil {
 		return err
 	}
-	pt.IncrementProgress(1)
-
-	pt.SetStage("Deleting instance.")
-	err = deleteInstance(svc, instanceID)
-	if err != nil {
-		return err
-	}
-	pt.IncrementProgress(1)
-
-	pt.SetStage("Deleting volume.")
-	err = deleteVolume(svc, volumeID)
-	if err != nil {
-		return err
-	}
-	pt.IncrementProgress(1)
 
 	// check if ami exists
 	// spawn from ami
