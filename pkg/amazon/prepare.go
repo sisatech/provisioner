@@ -102,8 +102,14 @@ func detachVolume(svc *ec2.EC2, volumeID *string) error {
 }
 
 func deleteVolume(svc *ec2.EC2, volumeID *string) error {
+
+	err := waitForVolumeToDetach(svc, volumeID)
+	if err != nil {
+		return err
+	}
+
 	fmt.Printf("deleteVolume\n")
-	_, err := svc.DeleteVolume(&ec2.DeleteVolumeInput{
+	_, err = svc.DeleteVolume(&ec2.DeleteVolumeInput{
 		VolumeId: volumeID,
 	})
 
@@ -292,7 +298,26 @@ func deleteDisk(p *Provisioner, name string) error {
 	return nil
 }
 
-// Prepare ...
+// func cleanUp(svc *ec2.EC2) {
+// 	err = deleteVolume(svc, volumeID)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	err = deleteSnapshot(svc, snapshotID)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	err = deleteInstance(svc, instanceID)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	err = deleteDisk(p, name)
+// 	if err != nil {
+// 		return err
+// 	}
+// }
+
+// Prepare creates an AMI from a ReadCloser r and names it name
 func (p *Provisioner) Prepare(r io.ReadCloser, name string) error {
 
 	sess := session.Must(session.NewSession(&aws.Config{
@@ -310,6 +335,8 @@ func (p *Provisioner) Prepare(r io.ReadCloser, name string) error {
 	if err != nil {
 		return err
 	}
+
+	defer deleteInstance(svc, instanceID)
 
 	err = stopInstance(svc, instanceID)
 	if err != nil {
@@ -331,21 +358,15 @@ func (p *Provisioner) Prepare(r io.ReadCloser, name string) error {
 		return err
 	}
 
-	err = waitForVolumeToDetach(svc, volumeID)
-	if err != nil {
-		return err
-	}
-
-	err = deleteVolume(svc, volumeID)
-	if err != nil {
-		return err
-	}
+	defer deleteVolume(svc, volumeID)
 
 	fmt.Printf("UploadingDisk\n")
 	err = p.Provision(name, r)
 	if err != nil {
 		return err
 	}
+
+	defer deleteDisk(p, name)
 
 	importTaskID, err := importSnapshot(svc, p.bucket, aws.String(name), p.format)
 	if err != nil {
@@ -356,15 +377,13 @@ func (p *Provisioner) Prepare(r io.ReadCloser, name string) error {
 		return err
 	}
 
+	defer deleteSnapshot(svc, snapshotID)
+
 	volumeID, err = createVolume(svc, availabilityZone, snapshotID)
 	if err != nil {
 		return err
 	}
 
-	err = deleteSnapshot(svc, snapshotID)
-	if err != nil {
-		return err
-	}
 	err = waitUntilVolumeCreated(svc, volumeID)
 	if err != nil {
 		return err
@@ -374,15 +393,6 @@ func (p *Provisioner) Prepare(r io.ReadCloser, name string) error {
 		return err
 	}
 	err = createImage(svc, instanceID, name)
-	if err != nil {
-		return err
-	}
-	err = deleteInstance(svc, instanceID)
-	if err != nil {
-		return err
-	}
-
-	err = deleteDisk(p, name)
 	if err != nil {
 		return err
 	}
