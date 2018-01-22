@@ -12,7 +12,7 @@ import (
 
 func createInstance(svc *ec2.EC2) (*string, error) {
 
-	fmt.Printf("createInstance:\n")
+	fmt.Printf("createInstance\n")
 	ri, err := svc.RunInstances(&ec2.RunInstancesInput{
 		ImageId:      aws.String("ami-7dce6507"),
 		InstanceType: aws.String("t2.micro"),
@@ -39,7 +39,7 @@ func createInstance(svc *ec2.EC2) (*string, error) {
 
 func stopInstance(svc *ec2.EC2, instanceID *string) error {
 
-	fmt.Printf("stopInstance:\n")
+	fmt.Printf("stopInstance\n")
 
 	_, err := svc.StopInstances(&ec2.StopInstancesInput{
 		InstanceIds: aws.StringSlice([]string{*instanceID}),
@@ -60,7 +60,7 @@ func stopInstance(svc *ec2.EC2, instanceID *string) error {
 }
 
 func getVolumeID(svc *ec2.EC2, instanceID *string) (*string, error) {
-	fmt.Printf("getVolumeID:\n")
+	fmt.Printf("getVolumeID\n")
 	di, err := svc.DescribeInstances(&ec2.DescribeInstancesInput{
 		InstanceIds: aws.StringSlice([]string{*instanceID}),
 	})
@@ -73,7 +73,7 @@ func getVolumeID(svc *ec2.EC2, instanceID *string) (*string, error) {
 }
 
 func getDeviceName(svc *ec2.EC2, instanceID *string) (*string, error) {
-	fmt.Printf("getDeviceName:\n")
+	fmt.Printf("getDeviceName\n")
 	di, err := svc.DescribeInstances(&ec2.DescribeInstancesInput{
 		InstanceIds: aws.StringSlice([]string{*instanceID}),
 	})
@@ -86,7 +86,7 @@ func getDeviceName(svc *ec2.EC2, instanceID *string) (*string, error) {
 }
 
 func detachVolume(svc *ec2.EC2, volumeID *string) error {
-	fmt.Printf("detachVolume:\n")
+	fmt.Printf("detachVolume\n")
 	_, err := svc.DetachVolume(&ec2.DetachVolumeInput{
 		VolumeId: volumeID,
 	})
@@ -98,7 +98,7 @@ func detachVolume(svc *ec2.EC2, volumeID *string) error {
 }
 
 func deleteVolume(svc *ec2.EC2, volumeID *string) error {
-	fmt.Printf("deleteVolume:\n")
+	fmt.Printf("deleteVolume\n")
 	_, err := svc.DeleteVolume(&ec2.DeleteVolumeInput{
 		VolumeId: volumeID,
 	})
@@ -110,7 +110,7 @@ func deleteVolume(svc *ec2.EC2, volumeID *string) error {
 }
 
 func waitForVolumeToDetach(svc *ec2.EC2, volumeID *string) error {
-	fmt.Printf("waitForVolumeToDetach:\n")
+	fmt.Printf("waitForVolumeToDetach\n")
 	err := svc.WaitUntilVolumeAvailable(&ec2.DescribeVolumesInput{
 		VolumeIds: aws.StringSlice([]string{*volumeID}),
 	})
@@ -122,7 +122,7 @@ func waitForVolumeToDetach(svc *ec2.EC2, volumeID *string) error {
 }
 
 func importSnapshot(svc *ec2.EC2, bucket *string, key *string, format *string) (*string, error) {
-	fmt.Printf("importSnapshot:\n")
+	fmt.Printf("importSnapshot\n")
 	is, err := svc.ImportSnapshot(&ec2.ImportSnapshotInput{
 		Description: aws.String("temp snapshot for " + *key),
 		DiskContainer: &ec2.SnapshotDiskContainer{
@@ -143,7 +143,7 @@ func importSnapshot(svc *ec2.EC2, bucket *string, key *string, format *string) (
 }
 
 func waitUntilSnapshotImported(svc *ec2.EC2, importTaskID *string) (*string, error) {
-	fmt.Printf("waitUntilSnapshotImported:\n")
+	fmt.Printf("waitUntilSnapshotImported\n")
 	isImportingSnapshot := true
 	var snapshotID *string
 	for {
@@ -174,7 +174,7 @@ func waitUntilSnapshotImported(svc *ec2.EC2, importTaskID *string) (*string, err
 }
 
 func createVolume(svc *ec2.EC2, region *string, snapshotID *string) (*string, error) {
-	fmt.Printf("createVolume:\n")
+	fmt.Printf("createVolume\n")
 	zones, err := svc.DescribeAvailabilityZones(&ec2.DescribeAvailabilityZonesInput{})
 
 	if err != nil {
@@ -203,7 +203,7 @@ func createVolume(svc *ec2.EC2, region *string, snapshotID *string) (*string, er
 }
 
 func deleteSnapshot(svc *ec2.EC2, snapshotID *string) error {
-	fmt.Printf("deleteSnapshot:\n")
+	fmt.Printf("deleteSnapshot\n")
 	_, err := svc.DeleteSnapshot(&ec2.DeleteSnapshotInput{
 		SnapshotId: snapshotID,
 	})
@@ -214,7 +214,7 @@ func deleteSnapshot(svc *ec2.EC2, snapshotID *string) error {
 }
 
 func waitUntilVolumeCreated(svc *ec2.EC2, volumeID *string) error {
-	fmt.Printf("waitUntilVolumeCreated:\n")
+	fmt.Printf("waitUntilVolumeCreated\n")
 	err := svc.WaitUntilVolumeAvailable(&ec2.DescribeVolumesInput{
 		VolumeIds: aws.StringSlice([]string{*volumeID}),
 	})
@@ -226,7 +226,7 @@ func waitUntilVolumeCreated(svc *ec2.EC2, volumeID *string) error {
 }
 
 func attachVolume(svc *ec2.EC2, volumeID *string, instanceID *string, deviceName *string) error {
-	fmt.Printf("attachVolume:\n")
+	fmt.Printf("attachVolume\n")
 	_, err := svc.AttachVolume(&ec2.AttachVolumeInput{
 		VolumeId:   volumeID,
 		InstanceId: instanceID,
@@ -240,7 +240,7 @@ func attachVolume(svc *ec2.EC2, volumeID *string, instanceID *string, deviceName
 }
 
 func createImage(svc *ec2.EC2, instanceID *string, name string) error {
-	fmt.Printf("createImage:\n")
+	fmt.Printf("createImage\n")
 	_, err := svc.CreateImage(&ec2.CreateImageInput{
 		InstanceId: instanceID,
 		Name:       aws.String(name),
@@ -253,7 +253,7 @@ func createImage(svc *ec2.EC2, instanceID *string, name string) error {
 }
 
 func deleteInstance(svc *ec2.EC2, instanceID *string) error {
-	fmt.Printf("deleteInstance:\n")
+	fmt.Printf("deleteInstance\n")
 	_, err := svc.TerminateInstances(&ec2.TerminateInstancesInput{
 		InstanceIds: aws.StringSlice([]string{*instanceID}),
 	})
@@ -308,7 +308,7 @@ func (p *Provisioner) Prepare(r io.ReadCloser, name string) error {
 		return err
 	}
 
-	fmt.Printf("UploadingDisk:\n")
+	fmt.Printf("UploadingDisk\n")
 	err = p.Provision(name, r)
 	if err != nil {
 		return err
