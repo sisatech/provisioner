@@ -12,12 +12,10 @@ import (
 func createInstance(svc *ec2.EC2) (*string, error) {
 
 	ri, err := svc.RunInstances(&ec2.RunInstancesInput{
-		ImageId:          aws.String("ami-7dce6507"),
-		InstanceType:     aws.String("t2.micro"),
-		KeyName:          aws.String("testdetach"),
-		SecurityGroupIds: aws.StringSlice([]string{"sg-63bc3916"}),
-		MaxCount:         aws.Int64(1),
-		MinCount:         aws.Int64(1),
+		ImageId:      aws.String("ami-7dce6507"),
+		InstanceType: aws.String("t2.micro"),
+		MaxCount:     aws.Int64(1),
+		MinCount:     aws.Int64(1),
 	})
 
 	if err != nil {
@@ -163,7 +161,23 @@ func waitUntilSnapshotImported(svc *ec2.EC2, importTaskID *string) (*string, err
 	return snapshotID, nil
 }
 
-func createVolume(svc *ec2.EC2, availabilityZone *string, snapshotID *string) (*string, error) {
+func createVolume(svc *ec2.EC2, region *string, snapshotID *string) (*string, error) {
+
+	zones, err := svc.DescribeAvailabilityZones(&ec2.DescribeAvailabilityZonesInput{})
+
+	if err != nil {
+		return nil, err
+	}
+
+	var availabilityZone *string
+
+	for i := 0; i < len(zones.AvailabilityZones); i++ {
+		if *zones.AvailabilityZones[i].RegionName == *region {
+			availabilityZone = zones.AvailabilityZones[i].ZoneName
+			break
+		}
+	}
+
 	cv, err := svc.CreateVolume(&ec2.CreateVolumeInput{
 		AvailabilityZone: availabilityZone,
 		SnapshotId:       snapshotID,
@@ -246,26 +260,32 @@ func Prepare(p *Provisioner, f string, r io.ReadCloser, name string) error {
 	if err != nil {
 		return err
 	}
+
 	err = stopInstance(svc, instanceID)
 	if err != nil {
 		return err
 	}
+
 	volumeID, err := getVolumeID(svc, instanceID)
 	if err != nil {
 		return err
 	}
+
 	deviceName, err := getDeviceName(svc, instanceID)
 	if err != nil {
 		return err
 	}
+
 	err = detachVolume(svc, volumeID)
 	if err != nil {
 		return err
 	}
+
 	err = waitForVolumeToDetach(svc, volumeID)
 	if err != nil {
 		return err
 	}
+
 	err = deleteVolume(svc, volumeID)
 	if err != nil {
 		return err
@@ -285,7 +305,7 @@ func Prepare(p *Provisioner, f string, r io.ReadCloser, name string) error {
 		return err
 	}
 
-	volumeID, err = createVolume(svc, aws.String("us-east-1c"), snapshotID)
+	volumeID, err = createVolume(svc, p.region, snapshotID)
 	if err != nil {
 		return err
 	}
@@ -307,6 +327,11 @@ func Prepare(p *Provisioner, f string, r io.ReadCloser, name string) error {
 		return err
 	}
 	err = deleteInstance(svc, instanceID)
+	if err != nil {
+		return err
+	}
+
+	err = deleteVolume(svc, volumeID)
 	if err != nil {
 		return err
 	}

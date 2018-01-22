@@ -16,9 +16,11 @@ import (
 
 // Provisioner ...
 type Provisioner struct {
-	cfg  *Config            // Config of the provisioner
-	blob *storage.Blob      // The blob that is uploaded
-	cnt  *storage.Container // container to upload the vhd into
+	cfg      *Config            // Config of the provisioner
+	blob     *storage.Blob      // The blob that is uploaded
+	cnt      *storage.Container // container to upload the vhd into
+	appID    string
+	password string
 }
 
 // Creates a sha256 hash of the string msg, with the key secretKey
