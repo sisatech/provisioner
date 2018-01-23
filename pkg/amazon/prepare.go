@@ -268,11 +268,12 @@ func attachVolume(svc *ec2.EC2, volumeID *string, instanceID *string, deviceName
 	return nil
 }
 
-func createImage(svc *ec2.EC2, instanceID *string, name string) error {
+func createImage(svc *ec2.EC2, instanceID *string, name, description string) error {
 	// fmt.Printf("createImage\n")
 	_, err := svc.CreateImage(&ec2.CreateImageInput{
-		InstanceId: instanceID,
-		Name:       aws.String(name),
+		InstanceId:  instanceID,
+		Name:        aws.String(name),
+		Description: aws.String(description),
 	})
 
 	if err != nil {
@@ -331,7 +332,7 @@ func deleteDisk(p *Provisioner, name string) error {
 // }
 
 // Prepare creates an AMI from a ReadCloser r and names it name
-func (p *Provisioner) Prepare(r io.ReadCloser, name string, pt progress.ProgressTracker) error {
+func (p *Provisioner) Prepare(r io.ReadCloser, name, description string, pt progress.ProgressTracker) error {
 
 	pt.Initialize("Provisioning Virtual Machine Image.", 112, progress.UnitStep)
 
@@ -436,7 +437,7 @@ func (p *Provisioner) Prepare(r io.ReadCloser, name string, pt progress.Progress
 	pt.IncrementProgress(1)
 
 	pt.SetStage("Creating image.")
-	err = createImage(svc, instanceID, name)
+	err = createImage(svc, instanceID, name, description)
 	if err != nil {
 		return err
 	}
