@@ -1,7 +1,9 @@
 package amazon
 
 import (
+	"fmt"
 	"io"
+	"strconv"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -165,8 +167,9 @@ func importSnapshot(svc *ec2.EC2, bucket *string, key *string, format *string) (
 	return is.ImportTaskId, nil
 }
 
-func waitUntilSnapshotImported(svc *ec2.EC2, importTaskID *string) (*string, error) {
+func waitUntilSnapshotImported(svc *ec2.EC2, importTaskID *string, pt progress.ProgressTracker) (*string, error) {
 	// fmt.Printf("waitUntilSnapshotImported\n")
+	initial := pt.Status().Progress
 	isImportingSnapshot := true
 	var snapshotID *string
 	for {
@@ -177,8 +180,15 @@ func waitUntilSnapshotImported(svc *ec2.EC2, importTaskID *string) (*string, err
 		}
 
 		for i := 0; i < len(st.ImportSnapshotTasks); i++ {
-			// fmt.Printf("st [%d]: %s\n", i, st.ImportSnapshotTasks[i])
 			if aws.StringValue(importTaskID) == aws.StringValue(st.ImportSnapshotTasks[i].ImportTaskId) {
+				if st.ImportSnapshotTasks[i].SnapshotTaskDetail != nil && st.ImportSnapshotTasks[i].SnapshotTaskDetail.StatusMessage != nil {
+					pt.SetStage(fmt.Sprintf("Importing snapshot: %s", *st.ImportSnapshotTasks[i].SnapshotTaskDetail.StatusMessage))
+				}
+				if st.ImportSnapshotTasks[i].SnapshotTaskDetail != nil && st.ImportSnapshotTasks[i].SnapshotTaskDetail.Progress != nil {
+					percentage, _ := strconv.ParseInt(*st.ImportSnapshotTasks[i].SnapshotTaskDetail.Progress, 10, 64)
+					pt.SetProgress(float64(percentage) + initial)
+				}
+				// fmt.Printf("st [%d]: %s\n", i, st.ImportSnapshotTasks[i])
 				if aws.StringValue(st.ImportSnapshotTasks[i].SnapshotTaskDetail.Status) == "completed" {
 					snapshotID = st.ImportSnapshotTasks[i].SnapshotTaskDetail.SnapshotId
 					isImportingSnapshot = false
@@ -192,6 +202,8 @@ func waitUntilSnapshotImported(svc *ec2.EC2, importTaskID *string) (*string, err
 		}
 		time.Sleep(15 * time.Second)
 	}
+
+	pt.SetProgress(100 + initial)
 
 	return snapshotID, nil
 }
@@ -268,7 +280,7 @@ func attachVolume(svc *ec2.EC2, volumeID *string, instanceID *string, deviceName
 	return nil
 }
 
-func createImage(svc *ec2.EC2, instanceID *string, name string, ownerID *string, overwrite bool) error {
+func createImage(svc *ec2.EC2, instanceID *string, name string, ownerID *string, description string, overwrite bool) error {
 	// fmt.Printf("createImage\n")
 
 	di, _ := svc.DescribeImages(&ec2.DescribeImagesInput{
@@ -295,8 +307,9 @@ func createImage(svc *ec2.EC2, instanceID *string, name string, ownerID *string,
 	}
 
 	_, err := svc.CreateImage(&ec2.CreateImageInput{
-		InstanceId: instanceID,
-		Name:       aws.String(name),
+		InstanceId:  instanceID,
+		Name:        aws.String(name),
+		Description: aws.String(description),
 	})
 
 	if err != nil {
@@ -349,9 +362,9 @@ func deleteDisk(p *Provisioner, name string) error {
 }
 
 // Prepare creates an AMI from a ReadCloser r and names it name
-func (p *Provisioner) Prepare(r io.ReadCloser, name string, pt progress.ProgressTracker) error {
+func (p *Provisioner) Prepare(r io.ReadCloser, name, description string, pt progress.ProgressTracker) error {
 
-	pt.Initialize("Provisioning Virtual Machine Image.", 12, progress.UnitStep)
+	pt.Initialize("Provisioning Virtual Machine Image.", 112, progress.UnitStep)
 
 	pt.SetStage("Authenticating with Amazon servers.")
 	sess := session.Must(session.NewSession(&aws.Config{
@@ -433,7 +446,7 @@ func (p *Provisioner) Prepare(r io.ReadCloser, name string, pt progress.Progress
 	if err != nil {
 		return err
 	}
-	snapshotID, err := waitUntilSnapshotImported(svc, importTaskID)
+	snapshotID, err := waitUntilSnapshotImported(svc, importTaskID, pt)
 	if err != nil {
 		return err
 	}
@@ -461,7 +474,7 @@ func (p *Provisioner) Prepare(r io.ReadCloser, name string, pt progress.Progress
 	pt.IncrementProgress(1)
 
 	pt.SetStage("Creating image.")
-	err = createImage(svc, instanceID, name, ownerID, true)
+	err = createImage(svc, instanceID, name, ownerID, description, true)
 	if err != nil {
 		return err
 	}
