@@ -43,7 +43,6 @@ func createInstance(svc *ec2.EC2, availabilityZone *string) (*string, error) {
 }
 
 func stopInstance(svc *ec2.EC2, instanceID *string) error {
-
 	// fmt.Printf("stopInstance\n")
 
 	_, err := svc.StopInstances(&ec2.StopInstancesInput{
@@ -88,6 +87,19 @@ func getDeviceName(svc *ec2.EC2, instanceID *string) (*string, error) {
 	}
 
 	return di.Reservations[0].Instances[0].BlockDeviceMappings[0].DeviceName, nil
+}
+
+func getOwnerID(svc *ec2.EC2, instanceID *string) (*string, error) {
+	// fmt.Printf("getOwnerID\n")
+	di, err := svc.DescribeInstances(&ec2.DescribeInstancesInput{
+		InstanceIds: aws.StringSlice([]string{*instanceID}),
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return di.Reservations[0].OwnerId, nil
 }
 
 func detachVolume(svc *ec2.EC2, volumeID *string) error {
@@ -256,8 +268,32 @@ func attachVolume(svc *ec2.EC2, volumeID *string, instanceID *string, deviceName
 	return nil
 }
 
-func createImage(svc *ec2.EC2, instanceID *string, name string) error {
+func createImage(svc *ec2.EC2, instanceID *string, name string, ownerID *string, overwrite bool) error {
 	// fmt.Printf("createImage\n")
+
+	di, _ := svc.DescribeImages(&ec2.DescribeImagesInput{
+		Owners: aws.StringSlice([]string{*ownerID}),
+	})
+
+	exists := false
+	var imageID *string
+
+	for i := 0; i < len(di.Images); i++ {
+		if *di.Images[i].Name == name {
+			exists = true
+			imageID = di.Images[i].ImageId
+			break
+		}
+	}
+
+	if exists {
+		if overwrite {
+			deleteImage(svc, imageID)
+		} else {
+			return nil
+		}
+	}
+
 	_, err := svc.CreateImage(&ec2.CreateImageInput{
 		InstanceId: instanceID,
 		Name:       aws.String(name),
@@ -266,6 +302,18 @@ func createImage(svc *ec2.EC2, instanceID *string, name string) error {
 	if err != nil {
 		return err
 	}
+	return nil
+}
+
+func deleteImage(svc *ec2.EC2, imageID *string) error {
+	// fmt.Printf("deleteImage\n")
+	_, err := svc.DeregisterImage(&ec2.DeregisterImageInput{
+		ImageId: imageID,
+	})
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -282,6 +330,7 @@ func deleteInstance(svc *ec2.EC2, instanceID *string) error {
 }
 
 func deleteDisk(p *Provisioner, name string) error {
+	// fmt.Printf("deleteDisk\n")
 	sess := session.Must(session.NewSession(&aws.Config{
 		Region:      p.region,
 		Credentials: p.credentials,
@@ -298,25 +347,6 @@ func deleteDisk(p *Provisioner, name string) error {
 
 	return nil
 }
-
-// func cleanUp(svc *ec2.EC2) {
-// 	err = deleteVolume(svc, volumeID)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	err = deleteSnapshot(svc, snapshotID)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	err = deleteInstance(svc, instanceID)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	err = deleteDisk(p, name)
-// 	if err != nil {
-// 		return err
-// 	}
-// }
 
 // Prepare creates an AMI from a ReadCloser r and names it name
 func (p *Provisioner) Prepare(r io.ReadCloser, name string, pt progress.ProgressTracker) error {
@@ -363,6 +393,13 @@ func (p *Provisioner) Prepare(r io.ReadCloser, name string, pt progress.Progress
 
 	pt.SetStage("Requesting device name")
 	deviceName, err := getDeviceName(svc, instanceID)
+	if err != nil {
+		return err
+	}
+	pt.IncrementProgress(1)
+
+	pt.SetStage("Requesting owner ID.")
+	ownerID, err := getOwnerID(svc, instanceID)
 	if err != nil {
 		return err
 	}
@@ -424,7 +461,7 @@ func (p *Provisioner) Prepare(r io.ReadCloser, name string, pt progress.Progress
 	pt.IncrementProgress(1)
 
 	pt.SetStage("Creating image.")
-	err = createImage(svc, instanceID, name)
+	err = createImage(svc, instanceID, name, ownerID, true)
 	if err != nil {
 		return err
 	}
