@@ -306,7 +306,7 @@ func createImage(svc *ec2.EC2, instanceID *string, name string, ownerID *string,
 		}
 	}
 
-	_, err := svc.CreateImage(&ec2.CreateImageInput{
+	ci, err := svc.CreateImage(&ec2.CreateImageInput{
 		InstanceId:  instanceID,
 		Name:        aws.String(name),
 		Description: aws.String(description),
@@ -315,6 +315,17 @@ func createImage(svc *ec2.EC2, instanceID *string, name string, ownerID *string,
 	if err != nil {
 		return err
 	}
+
+	imageID = ci.ImageId
+
+	err = svc.WaitUntilImageAvailable(&ec2.DescribeImagesInput{
+		ImageIds: aws.StringSlice([]string{*imageID}),
+	})
+
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -361,10 +372,32 @@ func deleteDisk(p *Provisioner, name string) error {
 	return nil
 }
 
-// Prepare creates an AMI from a ReadCloser r and names it name
-func (p *Provisioner) Prepare(r io.ReadCloser, name, description string, pt progress.ProgressTracker) error {
+func uploadAndImport(svc *ec2.EC2, p *Provisioner, r io.ReadCloser, name string, c chan *string, pt progress.ProgressTracker) error {
+	// fmt.Printf("uploadAndImport\n")
+	pt.SetStage("Provisioning.")
+	err := p.Provision(name, r)
+	if err != nil {
+		close(c)
+		return err
+	}
+	pt.IncrementProgress(1)
 
-	pt.Initialize("Provisioning Virtual Machine Image.", 112, progress.UnitStep)
+	pt.SetStage("Importing snapshot.")
+	importTaskID, err := importSnapshot(svc, p.bucket, aws.String(name), p.format)
+	if err != nil {
+		close(c)
+		return err
+	}
+
+	c <- importTaskID
+
+	return nil
+}
+
+// Prepare creates an AMI from a ReadCloser r and names it name
+func (p *Provisioner) Prepare(r io.ReadCloser, name, description string, overwriteImage bool, pt progress.ProgressTracker) error {
+
+	pt.Initialize("Provisioning Virtual Machine Image.", 113, progress.UnitStep)
 
 	pt.SetStage("Authenticating with Amazon servers.")
 	sess := session.Must(session.NewSession(&aws.Config{
@@ -373,6 +406,10 @@ func (p *Provisioner) Prepare(r io.ReadCloser, name, description string, pt prog
 	}))
 	svc := ec2.New(sess)
 	pt.IncrementProgress(1)
+
+	c := make(chan *string)
+	go uploadAndImport(svc, p, r, name, c, pt)
+	defer deleteDisk(p, name)
 
 	pt.SetStage("Requesting list of availability zones.")
 	availabilityZone, err := getAvailibityZone(svc, p.region)
@@ -432,19 +469,9 @@ func (p *Provisioner) Prepare(r io.ReadCloser, name, description string, pt prog
 	}
 	pt.IncrementProgress(1)
 
-	pt.SetStage("Provisioning.")
-	err = p.Provision(name, r)
-	if err != nil {
-		return err
-	}
-	pt.IncrementProgress(1)
-
-	defer deleteDisk(p, name)
-
-	pt.SetStage("Importing snapshot.")
-	importTaskID, err := importSnapshot(svc, p.bucket, aws.String(name), p.format)
-	if err != nil {
-		return err
+	importTaskID, ok := <-c
+	if ok == false {
+		return fmt.Errorf("Uploading or importing failed")
 	}
 	snapshotID, err := waitUntilSnapshotImported(svc, importTaskID, pt)
 	if err != nil {
@@ -474,12 +501,10 @@ func (p *Provisioner) Prepare(r io.ReadCloser, name, description string, pt prog
 	pt.IncrementProgress(1)
 
 	pt.SetStage("Creating image.")
-	err = createImage(svc, instanceID, name, ownerID, description, true)
+	err = createImage(svc, instanceID, name, ownerID, description, overwriteImage)
 	if err != nil {
 		return err
 	}
-
-	// check if ami exists
 	// spawn from ami
 
 	return nil

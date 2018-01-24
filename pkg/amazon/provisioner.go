@@ -37,7 +37,10 @@ func NewProvisioner(cfg *Config) (*Provisioner, error) {
 	p.format = aws.String(cfg.Format)
 	p.region = aws.String(cfg.Region)
 	if err != nil {
-		return nil, err
+		p.timeout, err = time.ParseDuration("999999s")
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return p, nil
