@@ -280,9 +280,8 @@ func attachVolume(svc *ec2.EC2, volumeID *string, instanceID *string, deviceName
 	return nil
 }
 
-func createImage(svc *ec2.EC2, instanceID *string, name string, ownerID *string, description string, overwrite bool) error {
-	// fmt.Printf("createImage\n")
-
+func checkImageExists(svc *ec2.EC2, name string, ownerID *string, overwrite bool) error {
+	// fmt.Printf("checkImageExists\n")
 	di, _ := svc.DescribeImages(&ec2.DescribeImagesInput{
 		Owners: aws.StringSlice([]string{*ownerID}),
 	})
@@ -302,9 +301,15 @@ func createImage(svc *ec2.EC2, instanceID *string, name string, ownerID *string,
 		if overwrite {
 			deleteImage(svc, imageID)
 		} else {
-			return nil
+			return fmt.Errorf("AMI '%s' already exists", name)
 		}
 	}
+
+	return nil
+}
+
+func createImage(svc *ec2.EC2, instanceID *string, name string, description string) error {
+	// fmt.Printf("createImage\n")
 
 	ci, err := svc.CreateImage(&ec2.CreateImageInput{
 		InstanceId:  instanceID,
@@ -316,7 +321,7 @@ func createImage(svc *ec2.EC2, instanceID *string, name string, ownerID *string,
 		return err
 	}
 
-	imageID = ci.ImageId
+	imageID := ci.ImageId
 
 	err = svc.WaitUntilImageAvailable(&ec2.DescribeImagesInput{
 		ImageIds: aws.StringSlice([]string{*imageID}),
@@ -397,7 +402,7 @@ func uploadAndImport(svc *ec2.EC2, p *Provisioner, r io.ReadCloser, name string,
 // Prepare creates an AMI from a ReadCloser r and names it name
 func (p *Provisioner) Prepare(r io.ReadCloser, name, description string, overwriteImage bool, pt progress.ProgressTracker) error {
 
-	pt.Initialize("Provisioning Virtual Machine Image.", 113, progress.UnitStep)
+	pt.Initialize("Provisioning Virtual Machine Image.", 114, progress.UnitStep)
 
 	pt.SetStage("Authenticating with Amazon servers.")
 	sess := session.Must(session.NewSession(&aws.Config{
@@ -455,6 +460,13 @@ func (p *Provisioner) Prepare(r io.ReadCloser, name, description string, overwri
 	}
 	pt.IncrementProgress(1)
 
+	pt.SetStage("Cheching if AMI already exists.")
+	err = checkImageExists(svc, name, ownerID, overwriteImage)
+	if err != nil {
+		return err
+	}
+	pt.IncrementProgress(1)
+
 	pt.SetStage("Detaching volume.")
 	err = detachVolume(svc, volumeID)
 	if err != nil {
@@ -501,7 +513,7 @@ func (p *Provisioner) Prepare(r io.ReadCloser, name, description string, overwri
 	pt.IncrementProgress(1)
 
 	pt.SetStage("Creating image.")
-	err = createImage(svc, instanceID, name, ownerID, description, overwriteImage)
+	err = createImage(svc, instanceID, name, description)
 	if err != nil {
 		return err
 	}
