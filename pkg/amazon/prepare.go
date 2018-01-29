@@ -91,17 +91,57 @@ func getDeviceName(svc *ec2.EC2, instanceID *string) (*string, error) {
 	return di.Reservations[0].Instances[0].BlockDeviceMappings[0].DeviceName, nil
 }
 
-func getOwnerID(svc *ec2.EC2, instanceID *string) (*string, error) {
+// func getOwnerID(svc *ec2.EC2, instanceID *string) (*string, error) {
+func getOwnerID(svc *ec2.EC2) (*string, error) {
 	// fmt.Printf("getOwnerID\n")
-	di, err := svc.DescribeInstances(&ec2.DescribeInstancesInput{
-		InstanceIds: aws.StringSlice([]string{*instanceID}),
-	})
 
+	// accounts only have access to security groups they own. So the ownerID is unique to them.
+	dsgo, err := svc.DescribeSecurityGroups(&ec2.DescribeSecurityGroupsInput{})
 	if err != nil {
 		return nil, err
 	}
 
-	return di.Reservations[0].OwnerId, nil
+	if len(dsgo.SecurityGroups) > 0 {
+		return dsgo.SecurityGroups[0].OwnerId, nil
+	}
+
+	// this should never occur as every account should have a default security group.
+	return nil, fmt.Errorf("no security groups found")
+
+	// csgo, err := svc.CreateSecurityGroup(&ec2.CreateSecurityGroupInput{
+	// 	Description: aws.String(""),
+	// 	GroupName:   aws.String(""),
+	// })
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	// dsgo, err = svc.DescribeSecurityGroups(&ec2.DescribeSecurityGroupsInput{})
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// if len(dsgo.SecurityGroups) > 0 {
+	// 	return nil, fmt.Errorf("no security groups found after creating one")
+	// }
+
+	// _, err = svc.DeleteSecurityGroup(&ec2.DeleteSecurityGroupInput{
+	// 	GroupName: csgo.GroupId,
+	// })
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	// return dsgo.SecurityGroups[0].OwnerId, nil
+
+	// di, err := svc.DescribeInstances(&ec2.DescribeInstancesInput{
+	// 	InstanceIds: aws.StringSlice([]string{*instanceID}),
+	// })
+
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	// return di.Reservations[0].OwnerId, nil
 }
 
 func detachVolume(svc *ec2.EC2, volumeID *string) error {
@@ -377,6 +417,21 @@ func deleteDisk(p *Provisioner, name string) error {
 	return nil
 }
 
+func registerImage(svc *ec2.EC2, snapshotID *string) error {
+	svc.RegisterImage(&ec2.RegisterImageInput{
+		RootDeviceName: aws.String("/dev/sda1"),
+		BlockDeviceMappings: []*ec2.BlockDeviceMapping{{
+			DeviceName: aws.String("/dev/sda1"),
+			Ebs: &ec2.EbsBlockDevice{
+				SnapshotId: snapshotID,
+			}},
+		},
+		Name:               aws.String("snap-image1"),
+		VirtualizationType: aws.String("hvm"),
+	})
+	return nil
+}
+
 func uploadAndImport(svc *ec2.EC2, p *Provisioner, r io.ReadCloser, name string, c chan *string, pt progress.ProgressTracker) error {
 	// fmt.Printf("uploadAndImport\n")
 	pt.SetStage("Provisioning.")
@@ -402,7 +457,7 @@ func uploadAndImport(svc *ec2.EC2, p *Provisioner, r io.ReadCloser, name string,
 // Prepare creates an AMI from a ReadCloser r and names it name
 func (p *Provisioner) Prepare(r io.ReadCloser, name, description string, overwriteImage bool, pt progress.ProgressTracker) error {
 
-	pt.Initialize("Provisioning Virtual Machine Image.", 114, progress.UnitStep)
+	pt.Initialize("Provisioning Virtual Machine Image.", 105, progress.UnitStep)
 
 	pt.SetStage("Authenticating with Amazon servers.")
 	sess := session.Must(session.NewSession(&aws.Config{
@@ -412,49 +467,11 @@ func (p *Provisioner) Prepare(r io.ReadCloser, name, description string, overwri
 	svc := ec2.New(sess)
 	pt.IncrementProgress(1)
 
-	c := make(chan *string)
-	go uploadAndImport(svc, p, r, name, c, pt)
-	defer deleteDisk(p, name)
-
-	pt.SetStage("Requesting list of availability zones.")
-	availabilityZone, err := getAvailibityZone(svc, p.region)
-	if err != nil {
-		return err
-	}
-	pt.IncrementProgress(1)
-
-	pt.SetStage("Creating generic VM instance.")
-	instanceID, err := createInstance(svc, availabilityZone)
-	if err != nil {
-		return err
-	}
-	pt.IncrementProgress(1)
-
-	defer deleteInstance(svc, instanceID)
-
-	pt.SetStage("Stopping generic VM instance.")
-	err = stopInstance(svc, instanceID)
-	if err != nil {
-		return err
-	}
-	pt.IncrementProgress(1)
-
-	pt.SetStage("Requesting volume ID.")
-	volumeID, err := getVolumeID(svc, instanceID)
-	if err != nil {
-		return err
-	}
-	pt.IncrementProgress(1)
-
-	pt.SetStage("Requesting device name")
-	deviceName, err := getDeviceName(svc, instanceID)
-	if err != nil {
-		return err
-	}
-	pt.IncrementProgress(1)
+	// c := make(chan *string)
+	// go uploadAndImport(svc, p, r, name, c, pt)
 
 	pt.SetStage("Requesting owner ID.")
-	ownerID, err := getOwnerID(svc, instanceID)
+	ownerID, err := getOwnerID(svc)
 	if err != nil {
 		return err
 	}
@@ -467,57 +484,133 @@ func (p *Provisioner) Prepare(r io.ReadCloser, name, description string, overwri
 	}
 	pt.IncrementProgress(1)
 
-	pt.SetStage("Detaching volume.")
-	err = detachVolume(svc, volumeID)
+	pt.SetStage("Provisioning.")
+	err = p.Provision(name, r)
 	if err != nil {
 		return err
 	}
 	pt.IncrementProgress(1)
 
-	pt.SetStage("Deleting volume.")
-	err = deleteVolume(svc, volumeID)
+	pt.SetStage("Importing snapshot.")
+	importTaskID, err := importSnapshot(svc, p.bucket, aws.String(name), p.format)
 	if err != nil {
 		return err
 	}
-	pt.IncrementProgress(1)
+	defer deleteDisk(p, name)
 
-	importTaskID, ok := <-c
-	if ok == false {
-		return fmt.Errorf("Uploading or importing failed")
-	}
+	// pt.SetStage("Requesting list of availability zones.")
+	// availabilityZone, err := getAvailibityZone(svc, p.region)
+	// if err != nil {
+	// 	return err
+	// }
+	// pt.IncrementProgress(1)
+
+	// pt.SetStage("Creating generic VM instance.")
+	// instanceID, err := createInstance(svc, availabilityZone)
+	// if err != nil {
+	// 	return err
+	// }
+	// pt.IncrementProgress(1)
+
+	// defer deleteInstance(svc, instanceID)
+
+	// pt.SetStage("Stopping generic VM instance.")
+	// err = stopInstance(svc, instanceID)
+	// if err != nil {
+	// 	return err
+	// }
+	// pt.IncrementProgress(1)
+
+	// pt.SetStage("Requesting volume ID.")
+	// volumeID, err := getVolumeID(svc, instanceID)
+	// if err != nil {
+	// 	return err
+	// }
+	// pt.IncrementProgress(1)
+
+	// pt.SetStage("Requesting device name")
+	// deviceName, err := getDeviceName(svc, instanceID)
+	// if err != nil {
+	// 	return err
+	// }
+	// pt.IncrementProgress(1)
+
+	// pt.SetStage("Requesting owner ID.")
+	// ownerID, err := getOwnerID(svc, instanceID)
+	// if err != nil {
+	// 	return err
+	// }
+	// pt.IncrementProgress(1)
+
+	// pt.SetStage("Cheching if AMI already exists.")
+	// err = checkImageExists(svc, name, ownerID, overwriteImage)
+	// if err != nil {
+	// 	return err
+	// }
+	// pt.IncrementProgress(1)
+
+	// pt.SetStage("Detaching volume.")
+	// err = detachVolume(svc, volumeID)
+	// if err != nil {
+	// 	return err
+	// }
+	// pt.IncrementProgress(1)
+
+	// pt.SetStage("Deleting volume.")
+	// err = deleteVolume(svc, volumeID)
+	// if err != nil {
+	// 	return err
+	// }
+	// pt.IncrementProgress(1)
+
+	// importTaskID, ok := <-c
+	// if ok == false {
+	// 	return fmt.Errorf("Uploading or importing failed")
+	// }
 	snapshotID, err := waitUntilSnapshotImported(svc, importTaskID, pt)
 	if err != nil {
 		return err
 	}
+
+	// defer deleteSnapshot(svc, snapshotID)
+
+	// err = registerImage(svc, snapshotID)
+	// if err != nil {
+	// 	return err
+	// }
+
+	// pt.SetStage("Creating volume.")
+	// volumeID, err = createVolume(svc, availabilityZone, snapshotID)
+	// if err != nil {
+	// 	return err
+	// }
+
+	// err = waitUntilVolumeCreated(svc, volumeID)
+	// if err != nil {
+	// 	return err
+	// }
+	// pt.IncrementProgress(1)
+
+	// pt.SetStage("Attaching volume.")
+	// err = attachVolume(svc, volumeID, instanceID, deviceName)
+	// if err != nil {
+	// 	return err
+	// }
+	// pt.IncrementProgress(1)
+
+	// pt.SetStage("Creating image.")
+	// err = createImage(svc, instanceID, name, description)
+	// if err != nil {
+	// 	return err
+	// }
+	// pt.IncrementProgress(1)
+
+	pt.SetStage("Regiestering image.")
+	err = registerImage(svc, snapshotID)
+	if err != nil {
+		return err
+	}
 	pt.IncrementProgress(1)
-
-	defer deleteSnapshot(svc, snapshotID)
-
-	pt.SetStage("Creating volume.")
-	volumeID, err = createVolume(svc, availabilityZone, snapshotID)
-	if err != nil {
-		return err
-	}
-
-	err = waitUntilVolumeCreated(svc, volumeID)
-	if err != nil {
-		return err
-	}
-	pt.IncrementProgress(1)
-
-	pt.SetStage("Attaching volume.")
-	err = attachVolume(svc, volumeID, instanceID, deviceName)
-	if err != nil {
-		return err
-	}
-	pt.IncrementProgress(1)
-
-	pt.SetStage("Creating image.")
-	err = createImage(svc, instanceID, name, description)
-	if err != nil {
-		return err
-	}
-	// spawn from ami
 
 	return nil
 }
