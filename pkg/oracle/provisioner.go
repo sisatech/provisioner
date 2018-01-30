@@ -45,13 +45,13 @@ type Provisioner struct {
 	user       string
 }
 
-func restRequest(verb string, url string, data interface{}, authCookie string) (*http.Response, error) {
+func sendRestRequest(verb string, url string, data interface{}, authCookie string) (*http.Response, error) {
 
-	AuthStructBytes, err := json.Marshal(data)
+	structBytes, err := json.Marshal(data)
 	if err != nil {
 		return nil, err
 	}
-	body := bytes.NewReader(AuthStructBytes)
+	body := bytes.NewReader(structBytes)
 
 	req, err := http.NewRequest(verb, url, body)
 	if err != nil {
@@ -81,7 +81,7 @@ func authenticate(p *Provisioner) (string, error) {
 		Password: p.cfg.Password,
 	}
 
-	resp, err := restRequest("POST", p.cfg.EndPoint+"authenticate/", authData, "")
+	resp, err := sendRestRequest("POST", p.cfg.EndPoint+"authenticate/", authData, "")
 	if err != nil {
 		return "", err
 	}
@@ -113,7 +113,7 @@ func addSSHKeys(p *Provisioner, keyName string) error {
 		Name:    p.user + keyName,
 	}
 
-	resp, err := restRequest("POST", "https://compute.aucom-east-1.oraclecloud.com/sshkey/", sshData, p.authCookie)
+	resp, err := sendRestRequest("POST", "https://compute.aucom-east-1.oraclecloud.com/sshkey/", sshData, p.authCookie)
 	if err != nil {
 		return err
 	}
@@ -134,7 +134,7 @@ func createSecurityLists(p *Provisioner, securityListName string) error {
 		Name:               p.user + securityListName,
 	}
 
-	resp, err := restRequest("POST", "https://compute.aucom-east-1.oraclecloud.com/seclist/", securityListsData, p.authCookie)
+	resp, err := sendRestRequest("POST", "https://compute.aucom-east-1.oraclecloud.com/seclist/", securityListsData, p.authCookie)
 	if err != nil {
 		return err
 	}
@@ -154,7 +154,7 @@ func reserveIPAddresses(p *Provisioner, ipName string) error {
 		Name:       p.user + ipName,
 	}
 
-	resp, err := restRequest("POST", "https://compute.aucom-east-1.oraclecloud.com/ip/reservation/", ipReservationsData, p.authCookie)
+	resp, err := sendRestRequest("POST", "https://compute.aucom-east-1.oraclecloud.com/ip/reservation/", ipReservationsData, p.authCookie)
 	if err != nil {
 		return err
 	}

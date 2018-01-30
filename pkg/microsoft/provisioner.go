@@ -21,6 +21,7 @@ type Provisioner struct {
 	cnt      *storage.Container // container to upload the vhd into
 	appID    string
 	password string
+	subID    string
 }
 
 // Creates a sha256 hash of the string msg, with the key secretKey
@@ -87,7 +88,7 @@ func NewProvisioner(cfg *Config) (*Provisioner, error) {
 
 	// attempts to create a container
 	err = createContainer(cfg)
-	if err != nil {
+	if err != nil && err.Error() != "bad status code 409" {
 		return nil, err
 	}
 	cnt := blobCli.GetContainerReference(cfg.Container)
