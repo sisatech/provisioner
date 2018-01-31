@@ -101,7 +101,12 @@ func NewProvisioner(cfg *Config) (*Provisioner, error) {
 // Provision ...
 func (p *Provisioner) Provision(f string, r io.ReadCloser) error {
 
-	blob := p.cnt.GetBlobReference(f)
+	name := f
+	if len(f) < 5 || string(f[len(f)-4:]) != ".vhd" {
+		name = f + ".vhd"
+	}
+
+	blob := p.cnt.GetBlobReference(name)
 	p.blob = blob
 
 	rBytes, err := ioutil.ReadAll(r)
@@ -110,9 +115,12 @@ func (p *Provisioner) Provision(f string, r io.ReadCloser) error {
 	}
 	length := len(rBytes)
 
-	// blob properties
+	// blob properties - length must be a multiple of 512 bytes
+	contentLength := int64(length)
 	remainder := int64(length) % 512
-	contentLength := int64(length) + 512 - remainder
+	if remainder > 0 {
+		contentLength += 512 - remainder
+	}
 
 	blob.Properties.ContentType = "text/plain"
 	blob.Properties.ContentLength = contentLength
@@ -123,15 +131,16 @@ func (p *Provisioner) Provision(f string, r io.ReadCloser) error {
 		return err
 	}
 
-	// writes data to blob - must be less than 4Mb and a multiple of 512 bytes
+	// writes data to blob - must be less than or equal to 4Mb and a multiple of 512 bytes
 	i := 0
-	for i = 0; i < (length - 2097152); i += 2097152 {
-		data := make([]byte, 2097152)
-		copy(rBytes[i:i+2097152], data[:])
+	for i = 0; i < (length - 4194304); i += 4194304 {
+		data := make([]byte, 4194304)
+		copy(data[:], rBytes[i:i+4194304])
 		br := storage.BlobRange{
 			Start: uint64(i),
-			End:   uint64(i + 2097152 - 1),
+			End:   uint64(i + 4194304 - 1),
 		}
+
 		err = blob.WriteRange(br, bytes.NewReader(data), nil)
 		if err != nil {
 			return err
@@ -139,7 +148,7 @@ func (p *Provisioner) Provision(f string, r io.ReadCloser) error {
 	}
 	rem := length - i
 	data := make([]byte, rem)
-	copy(rBytes[i:length], data[:])
+	copy(data[:], rBytes[i:length])
 	br := storage.BlobRange{
 		Start: uint64(i),
 		End:   uint64(length) - 1,

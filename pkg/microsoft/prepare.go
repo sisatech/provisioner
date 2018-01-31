@@ -7,7 +7,6 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 )
@@ -104,18 +103,13 @@ func sendRestRequest(authCookie string, verb string, url string, data interface{
 
 	var test bytes.Reader
 	body := &test
-	// body = nil
-	fmt.Printf("1: %p %p %p\n", data, body, nil)
 	if data != nil {
 		b, err := json.Marshal(data)
 		if err != nil {
 			return nil, err
 		}
-		fmt.Printf("2: %p %p %p\n", data, body, b)
 		body = bytes.NewReader(b)
-		fmt.Printf("3: %p %p %p\n", data, body, b)
 	}
-	fmt.Printf("4: %p %p %p\n", data, body, nil)
 
 	req, err := http.NewRequest(verb, url, body)
 	if err != nil {
@@ -134,7 +128,7 @@ func sendRestRequest(authCookie string, verb string, url string, data interface{
 	return resp, nil
 }
 
-func createResourceGroup(p *Provisioner, authCookie string) {
+func createResourceGroup(p *Provisioner, authCookie string) error {
 	// Create Resource Group
 	resourceGroupTagsData := resourceGroupTagsStruct{
 		Tagname1: "test-tag",
@@ -145,22 +139,21 @@ func createResourceGroup(p *Provisioner, authCookie string) {
 		Tags:     resourceGroupTagsData,
 	}
 
-	fmt.Println("Creating Resource Group...")
+	// fmt.Println("Creating Resource Group...")
 	resp, err := sendRestRequest(authCookie, "PUT", "https://management.azure.com/subscriptions/"+p.subID+"/resourceGroups/"+p.cfg.ResourceGroup+"?api-version=2017-08-01", resourceGroupData)
 	if err != nil {
-		fmt.Printf("Error: %s\n", err)
-		os.Exit(1)
+		return err
 	}
 	defer resp.Body.Close()
-	fmt.Printf("res: %+v: %s\n", resp.StatusCode, resp.Status)
 
 	if resp.StatusCode < 200 || resp.StatusCode > 201 {
-		fmt.Printf("Bad StatusCode\n")
-		os.Exit(1)
+		return fmt.Errorf("bad status code %d", resp.StatusCode)
 	}
+
+	return nil
 }
 
-func createVirtualNetwork(p *Provisioner, authCookie string, virtualNetworkName string) {
+func createVirtualNetwork(p *Provisioner, authCookie string, virtualNetworkName string) error {
 	// Create Virtual Network
 	virtualNetworkAddressSpaceData := virtualNetworkAddressSpaceStruct{
 		AddressPrefixes: []string{"10.0.0.0/16"},
@@ -189,49 +182,39 @@ func createVirtualNetwork(p *Provisioner, authCookie string, virtualNetworkName 
 	fmt.Println("Creating Virtual Network...")
 	resp, err := sendRestRequest(authCookie, "PUT", "https://management.azure.com/subscriptions/"+p.subID+"/resourceGroups/"+p.cfg.ResourceGroup+"/providers/Microsoft.Network/virtualNetworks/"+virtualNetworkName+"?api-version=2017-10-01", virtualNetworkStructData)
 	if err != nil {
-		fmt.Printf("Error: %s\n", err)
-		os.Exit(1)
+		return err
 	}
 	defer resp.Body.Close()
-	fmt.Printf("res: %+v: %s\n", resp.StatusCode, resp.Status)
 
 	if resp.StatusCode < 200 || resp.StatusCode > 201 {
-		fmt.Printf("Bad StatusCode\n")
-		fmt.Printf("%+v\n", resp)
-
-		bodyBytes, _ := ioutil.ReadAll(resp.Body)
-		fmt.Printf("\n%s\n", bodyBytes)
-		os.Exit(1)
+		return fmt.Errorf("bad status code %d", resp.StatusCode)
 	}
+
+	return nil
 }
 
-func createPublicIPAddresses(p *Provisioner, authCookie string, ipName string) {
+func createPublicIPAddresses(p *Provisioner, authCookie string, ipName string) error {
 	// Create Public IP Address
 	publicIPAddressData := &publicIPAddressStruct{
 		Name:     ipName,
 		Location: p.cfg.Location,
 	}
 
-	fmt.Println("Creating Public IP Address...")
+	// fmt.Println("Creating Public IP Address...")
 	resp, err := sendRestRequest(authCookie, "PUT", "https://management.azure.com/subscriptions/"+p.subID+"/resourceGroups/"+p.cfg.ResourceGroup+"/providers/Microsoft.Network/publicIPAddresses/"+ipName+"?api-version=2017-10-01", publicIPAddressData)
 	if err != nil {
-		fmt.Printf("Error: %s\n", err)
-		os.Exit(1)
+		return err
 	}
 	defer resp.Body.Close()
-	fmt.Printf("res: %+v: %s\n", resp.StatusCode, resp.Status)
 
 	if resp.StatusCode < 200 || resp.StatusCode > 201 {
-		fmt.Printf("Bad StatusCode\n")
-		fmt.Printf("%+v\n", resp)
-
-		bodyBytes, _ := ioutil.ReadAll(resp.Body)
-		fmt.Printf("\n%s\n", bodyBytes)
-		os.Exit(1)
+		return fmt.Errorf("bad status code %d", resp.StatusCode)
 	}
+
+	return nil
 }
 
-func createNetworkInterfaces(p *Provisioner, authCookie string, networkName string, ipName string, virtualNetworkName string, ipConfigName string) {
+func createNetworkInterfaces(p *Provisioner, authCookie string, networkName string, ipName string, virtualNetworkName string, ipConfigName string) error {
 	// Create Network interface
 	publicIPAddressConfigurationsData := publicIPAddressConfigurationsStruct{
 		ID: "/subscriptions/" + p.subID + "/resourceGroups/" + p.cfg.ResourceGroup + "/providers/Microsoft.Network/publicIPAddresses/" + ipName,
@@ -263,22 +246,21 @@ func createNetworkInterfaces(p *Provisioner, authCookie string, networkName stri
 		Properties: networkPropertiesData,
 	}
 
-	fmt.Println("Creating Network Interface...")
+	// fmt.Println("Creating Network Interface...")
 	resp, err := sendRestRequest(authCookie, "PUT", "https://management.azure.com/subscriptions/"+p.subID+"/resourceGroups/"+p.cfg.ResourceGroup+"/providers/Microsoft.Network/networkInterfaces/"+networkName+"?api-version=2017-11-01", networkInterfacesData)
 	if err != nil {
-		fmt.Printf("Error: %s\n", err)
-		os.Exit(1)
+		return err
 	}
 	defer resp.Body.Close()
-	fmt.Printf("res: %+v: %s\n", resp.StatusCode, resp.Status)
 
 	if resp.StatusCode < 200 || resp.StatusCode > 201 {
-		fmt.Printf("Bad StatusCode\n")
-		os.Exit(1)
+		return fmt.Errorf("bad status code %d", resp.StatusCode)
 	}
+
+	return nil
 }
 
-func createImage(p *Provisioner, authCookie string, imageName string, blobURI string) {
+func createImage(p *Provisioner, authCookie string, imageName string, blobURI string) error {
 	// Create Image
 	imageOSDiskData := imageOSDiskStruct{
 		OsType:  "Linux",
@@ -299,36 +281,29 @@ func createImage(p *Provisioner, authCookie string, imageName string, blobURI st
 		Properties: imagePropertiesData,
 	}
 
-	fmt.Println("Creating VM Image...")
+	// fmt.Println("Creating VM Image...")
 	resp, err := sendRestRequest(authCookie, "PUT", "https://management.azure.com/subscriptions/"+p.subID+"/resourceGroups/"+p.cfg.ResourceGroup+"/providers/Microsoft.Compute/images/"+imageName+"?api-version=2017-12-01", imageData)
 	if err != nil {
-		fmt.Printf("Error: %s\n", err)
-		os.Exit(1)
+		return err
 	}
 	defer resp.Body.Close()
-	fmt.Printf("res: %+v: %s\n", resp.StatusCode, resp.Status)
 
 	if resp.StatusCode < 200 || resp.StatusCode > 201 {
-		fmt.Printf("Bad StatusCode\n")
-		fmt.Printf("%+v\n", resp)
-
-		bodyBytes, _ := ioutil.ReadAll(resp.Body)
-		fmt.Printf("\n%s\n", bodyBytes)
-		os.Exit(1)
+		return fmt.Errorf("bad status code %d", resp.StatusCode)
 	}
+
+	return nil
 }
 
-func waitUntilImageCreated(p *Provisioner, authCookie string, imageName string) {
+func waitUntilImageCreated(p *Provisioner, authCookie string, imageName string) error {
 	for {
 		resp, err := sendRestRequest(authCookie, "GET", "https://management.azure.com/subscriptions/"+p.subID+"/resourceGroups/"+p.cfg.ResourceGroup+"/providers/Microsoft.Compute/images/"+imageName+"?api-version=2017-12-01", nil)
 
-		fmt.Println("Checking if Image has been created...")
+		// fmt.Println("Checking if Image has been created...")
 		if err != nil {
-			fmt.Printf("Error: %s\n", err)
-			os.Exit(1)
+			return err
 		}
 		defer resp.Body.Close()
-		fmt.Printf("res: %+v: %s\n", resp.StatusCode, resp.Status)
 
 		bodyBytes, _ := ioutil.ReadAll(resp.Body)
 		j := make(map[string]interface{})
@@ -337,12 +312,7 @@ func waitUntilImageCreated(p *Provisioner, authCookie string, imageName string) 
 		status := j["properties"].(map[string]interface{})["provisioningState"].(string)
 
 		if resp.StatusCode < 200 || resp.StatusCode > 202 {
-			fmt.Printf("Bad StatusCode\n")
-			fmt.Printf("%+v\n", resp)
-
-			bodyBytes, _ := ioutil.ReadAll(resp.Body)
-			fmt.Printf("\n%s\n", bodyBytes)
-			os.Exit(1)
+			return fmt.Errorf("bad status code %d", resp.StatusCode)
 		}
 
 		if status == "Succeeded" {
@@ -350,56 +320,81 @@ func waitUntilImageCreated(p *Provisioner, authCookie string, imageName string) 
 		}
 		time.Sleep(15 * time.Second)
 	}
+
+	return nil
 }
 
-// Prepare ...
-func (p *Provisioner) Prepare(r io.ReadCloser, name string) error {
+func authorise(p *Provisioner) (string, error) {
 	// Authorisation
+	// fmt.Println("Authorising...")
 
 	authBody := strings.NewReader(`grant_type=client_credentials&client_id=` + p.appID + `&client_secret=` + p.password + `&resource=https%3A%2F%2Fmanagement.azure.com%2F`)
 
 	req, err := http.NewRequest("POST", "https://login.microsoftonline.com/13d2599e-aa13-4ccf-9a61-737690c21451/oauth2/token", authBody)
 	if err != nil {
-		fmt.Printf("Error: %s\n", err)
-		os.Exit(1)
+		return "", err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	fmt.Println("Authorising...")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		fmt.Printf("Error: %s\n", err)
-		os.Exit(1)
+		return "", err
 	}
 	defer resp.Body.Close()
-	fmt.Printf("res: %+v: %s\n", resp.StatusCode, resp.Status)
 
 	if resp.StatusCode < 200 || resp.StatusCode > 201 {
-		fmt.Printf("Bad StatusCode\n")
-		os.Exit(1)
+		return "", err
 	}
 
 	bodyBytes, _ := ioutil.ReadAll(resp.Body)
 	j := make(map[string]interface{})
 	json.Unmarshal(bodyBytes, &j)
 
-	authCookie := j["access_token"].(string)
+	return j["access_token"].(string), nil
+}
 
-	fmt.Printf("%s\n", authCookie)
+// Prepare ...
+func (p *Provisioner) Prepare(r io.ReadCloser, name string) error {
 
-	p.Prepare(r, name)
+	authCookie, err := authorise(p)
+	if err != nil {
+		return err
+	}
 
-	createResourceGroup(p, authCookie)
+	err = p.Provision(name, r)
+	if err != nil {
+		return err
+	}
 
-	createVirtualNetwork(p, authCookie, name+"VirtualNetwork")
+	err = createResourceGroup(p, authCookie)
+	if err != nil {
+		return err
+	}
 
-	createPublicIPAddresses(p, authCookie, name+"-ip")
+	err = createVirtualNetwork(p, authCookie, name+"VirtualNetwork")
+	if err != nil {
+		return err
+	}
 
-	createNetworkInterfaces(p, authCookie, name+"-nic", name+"-ip", name+"VirtualNetwork", name+"IPConfig")
+	err = createPublicIPAddresses(p, authCookie, name+"-ip")
+	if err != nil {
+		return err
+	}
 
-	createImage(p, authCookie, name, "https:/"+p.cfg.StorageAccount+".blob.core.windows.net/"+p.cfg.Container+"/"+name+".vhd")
+	err = createNetworkInterfaces(p, authCookie, name+"-nic", name+"-ip", name+"VirtualNetwork", name+"IPConfig")
+	if err != nil {
+		return err
+	}
 
-	waitUntilImageCreated(p, authCookie, name)
+	err = createImage(p, authCookie, name, "https://"+p.cfg.StorageAccount+".blob.core.windows.net/"+p.cfg.Container+"/"+name+".vhd")
+	if err != nil {
+		return err
+	}
+
+	err = waitUntilImageCreated(p, authCookie, name)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
