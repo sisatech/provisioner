@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/Azure/azure-sdk-for-go/storage"
 )
 
 type resourceGroupTagsStruct struct {
@@ -353,6 +355,14 @@ func authorise(p *Provisioner) (string, error) {
 	return j["access_token"].(string), nil
 }
 
+func deleteVHD(p *Provisioner, name string) error {
+	err := p.blob.Delete(&storage.DeleteBlobOptions{})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // Prepare ...
 func (p *Provisioner) Prepare(r io.ReadCloser, name string) error {
 
@@ -392,6 +402,11 @@ func (p *Provisioner) Prepare(r io.ReadCloser, name string) error {
 	}
 
 	err = waitUntilImageCreated(p, authCookie, name)
+	if err != nil {
+		return err
+	}
+
+	deleteVHD(p, name)
 	if err != nil {
 		return err
 	}
