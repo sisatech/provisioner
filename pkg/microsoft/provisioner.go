@@ -19,9 +19,7 @@ type Provisioner struct {
 	cfg      *Config            // Config of the provisioner
 	blob     *storage.Blob      // The blob that is uploaded
 	cnt      *storage.Container // container to upload the vhd into
-	appID    string
-	password string
-	subID    string
+	password string             // Users password
 }
 
 // Creates a sha256 hash of the string msg, with the key secretKey

@@ -142,7 +142,7 @@ func createResourceGroup(p *Provisioner, authCookie string) error {
 	}
 
 	// fmt.Println("Creating Resource Group...")
-	resp, err := sendRestRequest(authCookie, "PUT", "https://management.azure.com/subscriptions/"+p.subID+"/resourceGroups/"+p.cfg.ResourceGroup+"?api-version=2017-08-01", resourceGroupData)
+	resp, err := sendRestRequest(authCookie, "PUT", "https://management.azure.com/subscriptions/"+p.cfg.SubID+"/resourceGroups/"+p.cfg.ResourceGroup+"?api-version=2017-08-01", resourceGroupData)
 	if err != nil {
 		return err
 	}
@@ -181,8 +181,8 @@ func createVirtualNetwork(p *Provisioner, authCookie string, virtualNetworkName 
 		Properties: virtualNetworkPropertiesData,
 	}
 
-	fmt.Println("Creating Virtual Network...")
-	resp, err := sendRestRequest(authCookie, "PUT", "https://management.azure.com/subscriptions/"+p.subID+"/resourceGroups/"+p.cfg.ResourceGroup+"/providers/Microsoft.Network/virtualNetworks/"+virtualNetworkName+"?api-version=2017-10-01", virtualNetworkStructData)
+	// fmt.Println("Creating Virtual Network...")
+	resp, err := sendRestRequest(authCookie, "PUT", "https://management.azure.com/subscriptions/"+p.cfg.SubID+"/resourceGroups/"+p.cfg.ResourceGroup+"/providers/Microsoft.Network/virtualNetworks/"+virtualNetworkName+"?api-version=2017-10-01", virtualNetworkStructData)
 	if err != nil {
 		return err
 	}
@@ -203,7 +203,7 @@ func createPublicIPAddresses(p *Provisioner, authCookie string, ipName string) e
 	}
 
 	// fmt.Println("Creating Public IP Address...")
-	resp, err := sendRestRequest(authCookie, "PUT", "https://management.azure.com/subscriptions/"+p.subID+"/resourceGroups/"+p.cfg.ResourceGroup+"/providers/Microsoft.Network/publicIPAddresses/"+ipName+"?api-version=2017-10-01", publicIPAddressData)
+	resp, err := sendRestRequest(authCookie, "PUT", "https://management.azure.com/subscriptions/"+p.cfg.SubID+"/resourceGroups/"+p.cfg.ResourceGroup+"/providers/Microsoft.Network/publicIPAddresses/"+ipName+"?api-version=2017-10-01", publicIPAddressData)
 	if err != nil {
 		return err
 	}
@@ -219,11 +219,11 @@ func createPublicIPAddresses(p *Provisioner, authCookie string, ipName string) e
 func createNetworkInterfaces(p *Provisioner, authCookie string, networkName string, ipName string, virtualNetworkName string, ipConfigName string) error {
 	// Create Network interface
 	publicIPAddressConfigurationsData := publicIPAddressConfigurationsStruct{
-		ID: "/subscriptions/" + p.subID + "/resourceGroups/" + p.cfg.ResourceGroup + "/providers/Microsoft.Network/publicIPAddresses/" + ipName,
+		ID: "/subscriptions/" + p.cfg.SubID + "/resourceGroups/" + p.cfg.ResourceGroup + "/providers/Microsoft.Network/publicIPAddresses/" + ipName,
 	}
 
 	subnetData := subnetStruct{
-		ID: "/subscriptions/" + p.subID + "/resourceGroups/" + p.cfg.ResourceGroup + "/providers/Microsoft.Network/virtualNetworks/" + virtualNetworkName + "/subnets/default",
+		ID: "/subscriptions/" + p.cfg.SubID + "/resourceGroups/" + p.cfg.ResourceGroup + "/providers/Microsoft.Network/virtualNetworks/" + virtualNetworkName + "/subnets/default",
 	}
 
 	ipConfigerationsPropertiesData := iPConfigurationsPropertiesStruct{
@@ -243,13 +243,13 @@ func createNetworkInterfaces(p *Provisioner, authCookie string, networkName stri
 
 	networkInterfacesData := &networkInterfaceStruct{
 		Name:       networkName,
-		ID:         "/subscriptions/" + p.subID + "/resourceGroups/" + p.cfg.ResourceGroup + "/providers/Microsoft.Network/networkInterfaces/" + networkName,
+		ID:         "/subscriptions/" + p.cfg.SubID + "/resourceGroups/" + p.cfg.ResourceGroup + "/providers/Microsoft.Network/networkInterfaces/" + networkName,
 		Location:   p.cfg.Location,
 		Properties: networkPropertiesData,
 	}
 
 	// fmt.Println("Creating Network Interface...")
-	resp, err := sendRestRequest(authCookie, "PUT", "https://management.azure.com/subscriptions/"+p.subID+"/resourceGroups/"+p.cfg.ResourceGroup+"/providers/Microsoft.Network/networkInterfaces/"+networkName+"?api-version=2017-11-01", networkInterfacesData)
+	resp, err := sendRestRequest(authCookie, "PUT", "https://management.azure.com/subscriptions/"+p.cfg.SubID+"/resourceGroups/"+p.cfg.ResourceGroup+"/providers/Microsoft.Network/networkInterfaces/"+networkName+"?api-version=2017-11-01", networkInterfacesData)
 	if err != nil {
 		return err
 	}
@@ -284,7 +284,7 @@ func createImage(p *Provisioner, authCookie string, imageName string, blobURI st
 	}
 
 	// fmt.Println("Creating VM Image...")
-	resp, err := sendRestRequest(authCookie, "PUT", "https://management.azure.com/subscriptions/"+p.subID+"/resourceGroups/"+p.cfg.ResourceGroup+"/providers/Microsoft.Compute/images/"+imageName+"?api-version=2017-12-01", imageData)
+	resp, err := sendRestRequest(authCookie, "PUT", "https://management.azure.com/subscriptions/"+p.cfg.SubID+"/resourceGroups/"+p.cfg.ResourceGroup+"/providers/Microsoft.Compute/images/"+imageName+"?api-version=2017-12-01", imageData)
 	if err != nil {
 		return err
 	}
@@ -299,7 +299,7 @@ func createImage(p *Provisioner, authCookie string, imageName string, blobURI st
 
 func waitUntilImageCreated(p *Provisioner, authCookie string, imageName string) error {
 	for {
-		resp, err := sendRestRequest(authCookie, "GET", "https://management.azure.com/subscriptions/"+p.subID+"/resourceGroups/"+p.cfg.ResourceGroup+"/providers/Microsoft.Compute/images/"+imageName+"?api-version=2017-12-01", nil)
+		resp, err := sendRestRequest(authCookie, "GET", "https://management.azure.com/subscriptions/"+p.cfg.SubID+"/resourceGroups/"+p.cfg.ResourceGroup+"/providers/Microsoft.Compute/images/"+imageName+"?api-version=2017-12-01", nil)
 
 		// fmt.Println("Checking if Image has been created...")
 		if err != nil {
@@ -329,8 +329,9 @@ func waitUntilImageCreated(p *Provisioner, authCookie string, imageName string) 
 func authorise(p *Provisioner) (string, error) {
 	// Authorisation
 	// fmt.Println("Authorising...")
+	appID := "39d15fa2-78db-4e29-a49e-e2ea61f88167"
 
-	authBody := strings.NewReader(`grant_type=client_credentials&client_id=` + p.appID + `&client_secret=` + p.password + `&resource=https%3A%2F%2Fmanagement.azure.com%2F`)
+	authBody := strings.NewReader(`grant_type=client_credentials&client_id=` + appID + `&client_secret=` + p.password + `&resource=https%3A%2F%2Fmanagement.azure.com%2F`)
 
 	req, err := http.NewRequest("POST", "https://login.microsoftonline.com/13d2599e-aa13-4ccf-9a61-737690c21451/oauth2/token", authBody)
 	if err != nil {
@@ -363,10 +364,58 @@ func deleteVHD(p *Provisioner, name string) error {
 	return nil
 }
 
+func checkImageExists(p *Provisioner, authCookie string, imageName string, overwrite bool) error {
+	resp, err := sendRestRequest(authCookie, "GET", "https://management.azure.com/subscriptions/"+p.cfg.SubID+"/resourceGroups/"+p.cfg.ResourceGroup+"/providers/Microsoft.Compute/images/?api-version=2016-04-30-preview", nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode > 201 {
+		return fmt.Errorf("bad status code %d", resp.StatusCode)
+	}
+
+	bodyBytes, _ := ioutil.ReadAll(resp.Body)
+	j := make(map[string]interface{})
+	json.Unmarshal(bodyBytes, &j)
+
+	for i := 0; i < len(j["value"].([]interface{})); i++ {
+		if j["value"].([]interface{})[i].(map[string]interface{})["name"] == imageName {
+			if overwrite {
+				deleteImage(p, authCookie, imageName)
+			} else {
+				return fmt.Errorf("Image '%s' already exists", imageName)
+			}
+		}
+	}
+
+	return nil
+}
+
+func deleteImage(p *Provisioner, authCookie string, imageName string) error {
+
+	resp, err := sendRestRequest(authCookie, "DELETE", "https://management.azure.com/subscriptions/"+p.cfg.SubID+"/resourceGroups/"+p.cfg.ResourceGroup+"/providers/Microsoft.Compute/images/"+imageName+"?api-version=2016-04-30-preview", nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode > 201 {
+		return fmt.Errorf("bad status code %d", resp.StatusCode)
+	}
+
+	return nil
+}
+
 // Prepare ...
-func (p *Provisioner) Prepare(r io.ReadCloser, name string) error {
+func (p *Provisioner) Prepare(r io.ReadCloser, name string, overwriteImage bool) error {
 
 	authCookie, err := authorise(p)
+	if err != nil {
+		return err
+	}
+
+	err = checkImageExists(p, authCookie, name, overwriteImage)
 	if err != nil {
 		return err
 	}
@@ -381,20 +430,20 @@ func (p *Provisioner) Prepare(r io.ReadCloser, name string) error {
 		return err
 	}
 
-	err = createVirtualNetwork(p, authCookie, name+"VirtualNetwork")
-	if err != nil {
-		return err
-	}
+	// err = createVirtualNetwork(p, authCookie, name+"VirtualNetwork")
+	// if err != nil {
+	// 	return err
+	// }
 
-	err = createPublicIPAddresses(p, authCookie, name+"-ip")
-	if err != nil {
-		return err
-	}
+	// err = createPublicIPAddresses(p, authCookie, name+"-ip")
+	// if err != nil {
+	// 	return err
+	// }
 
-	err = createNetworkInterfaces(p, authCookie, name+"-nic", name+"-ip", name+"VirtualNetwork", name+"IPConfig")
-	if err != nil {
-		return err
-	}
+	// err = createNetworkInterfaces(p, authCookie, name+"-nic", name+"-ip", name+"VirtualNetwork", name+"IPConfig")
+	// if err != nil {
+	// 	return err
+	// }
 
 	err = createImage(p, authCookie, name, "https://"+p.cfg.StorageAccount+".blob.core.windows.net/"+p.cfg.Container+"/"+name+".vhd")
 	if err != nil {

@@ -7,4 +7,5 @@ type Config struct {
 	Container      string // Name of the existing container or container to be created.
 	Location       string // Region that the image is to be provisioned in
 	ResourceGroup  string // ResourceGroup to deploy the image to
+	SubID          string // The subscription ID of the account
 }
