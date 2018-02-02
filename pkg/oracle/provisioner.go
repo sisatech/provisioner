@@ -2,41 +2,11 @@ package oracle
 
 import (
 	"bytes"
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/sha1"
-	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
-	"os"
-	"time"
-
-	"golang.org/x/crypto/ssh"
 )
-
-type authStruct struct {
-	User     string `json:"user"`
-	Password string `json:"password"`
-}
-
-type sSHStruct struct {
-	Enabled bool   `json:"enabled"`
-	Key     string `json:"key"`
-	Name    string `json:"name"`
-}
-
-type securityListsStruct struct {
-	Policy             string `json:"policy"`
-	OutboundCidrPolicy string `json:"outbound_cidr_policy"`
-	Name               string `json:"name"`
-}
-
-type iPRservationStruct struct {
-	Parentpool string      `json:"parentpool"`
-	Permanent  bool        `json:"permanent"`
-	Name       interface{} `json:"name"`
-}
 
 // Provisioner ...
 type Provisioner struct {
@@ -45,22 +15,22 @@ type Provisioner struct {
 	user       string
 }
 
-func sendRestRequest(verb string, url string, data interface{}, authCookie string) (*http.Response, error) {
+func sendObjectRequest(verb string, url string, data interface{}, authCookie string) (*http.Response, error) {
 
-	structBytes, err := json.Marshal(data)
-	if err != nil {
-		return nil, err
+	var body io.Reader
+	b, ok := data.([]byte)
+	if !ok {
+		body = nil
+	} else {
+		body = bytes.NewReader(b)
 	}
-	body := bytes.NewReader(structBytes)
 
 	req, err := http.NewRequest(verb, url, body)
 	if err != nil {
 		return nil, err
 	}
 
-	req.Header.Set("Cookie", authCookie)
-	req.Header.Set("Content-Type", "application/oracle-compute-v3+json")
-	req.Header.Set("Accept", "application/oracle-compute-v3+json")
+	req.Header.Set("X-Auth-Token", authCookie)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -72,124 +42,84 @@ func sendRestRequest(verb string, url string, data interface{}, authCookie strin
 	return resp, nil
 }
 
-func authenticate(p *Provisioner) (string, error) {
-	user := "/Compute-" + p.cfg.ServerInstaceID + "/" + p.cfg.UserName + "/"
-	p.user = user
-
-	authData := &authStruct{
-		User:     user,
-		Password: p.cfg.Password,
-	}
-
-	resp, err := sendRestRequest("POST", p.cfg.EndPoint+"authenticate/", authData, "")
-	if err != nil {
-		return "", err
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode > 204 {
-		return "", fmt.Errorf("bad status code %d", resp.StatusCode)
-	}
-
-	return resp.Header["Set-Cookie"][0], nil
-}
-
-func addSSHKeys(p *Provisioner, keyName string) error {
-
-	// generate private key
-	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		return err
-	}
-
-	// generate public key
-	pub, err := ssh.NewPublicKey(&privateKey.PublicKey)
-	if err != nil {
-		return err
-	}
-
-	sshData := &sSHStruct{
-		Enabled: true,
-		Key:     string(ssh.MarshalAuthorizedKey(pub)),
-		Name:    p.user + keyName,
-	}
-
-	resp, err := sendRestRequest("POST", "https://compute.aucom-east-1.oraclecloud.com/sshkey/", sshData, p.authCookie)
-	if err != nil {
-		return err
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode > 204 {
-		fmt.Printf("Bad StatusCode\n")
-		os.Exit(1)
-	}
-
-	return nil
-}
-
-func createSecurityLists(p *Provisioner, securityListName string) error {
-
-	securityListsData := &securityListsStruct{
-		Policy:             "",
-		OutboundCidrPolicy: "",
-		Name:               p.user + securityListName,
-	}
-
-	resp, err := sendRestRequest("POST", "https://compute.aucom-east-1.oraclecloud.com/seclist/", securityListsData, p.authCookie)
-	if err != nil {
-		return err
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode > 204 {
-		fmt.Printf("Bad StatusCode\n")
-		os.Exit(1)
-	}
-
-	return nil
-}
-
-func reserveIPAddresses(p *Provisioner, ipName string) error {
-	ipReservationsData := &iPRservationStruct{
-		Parentpool: "/oracle/public/ippool",
-		Permanent:  true,
-		Name:       p.user + ipName,
-	}
-
-	resp, err := sendRestRequest("POST", "https://compute.aucom-east-1.oraclecloud.com/ip/reservation/", ipReservationsData, p.authCookie)
-	if err != nil {
-		return err
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode > 204 {
-		fmt.Printf("Bad StatusCode\n")
-		os.Exit(1)
-	}
-	return nil
-}
-
 // NewProvisioner ...
 func NewProvisioner(cfg *Config) (*Provisioner, error) {
 	p := new(Provisioner)
 
 	p.cfg = cfg
 
-	authCookie, err := authenticate(p)
+	authCookie, err := authenticateCompute(p)
 	if err != nil {
 		return nil, err
 	}
 
 	p.authCookie = authCookie
 
-	h := sha1.New()
-	h.Write([]byte(time.Now().String()))
-	hash := fmt.Sprintf("%x", h.Sum(nil))
-
-	addSSHKeys(p, "key-"+hash)
-
 	return p, nil
+}
+
+func authenticateStorage() (string, error) {
+
+	req, err := http.NewRequest("GET", "https://sisatech.storage.oraclecloud.com/auth/v1.0", nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("X-Storage-User", "Storage-sisatech:joel.smith@sisa-tech.com")
+	req.Header.Set("X-Storage-Pass", "Something1")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	return resp.Header["X-Storage-Token"][0], nil
+}
+
+func deleteObject(onjectName string) error {
+	authCookie, err := authenticateStorage()
+	if err != nil {
+		return err
+	}
+
+	resp, err := sendObjectRequest("DELETE", "https://sisatech.storage.oraclecloud.com/v1/Storage-sisatech/compute_images/"+onjectName+".tar.gz", nil, authCookie)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode > 204 {
+		return fmt.Errorf("bad status code %d", resp.StatusCode)
+	}
+
+	return nil
 }
 
 // Provision ...
 func (p *Provisioner) Provision(f string, r io.ReadCloser) error {
+	fmt.Printf("Provision...\n")
+
+	// delete the object if it already exists
+	err := deleteObject(f)
+	if err != nil && err.Error() != "bad status code 404" {
+		return err
+	}
+
+	authCookie, err := authenticateStorage()
+	if err != nil {
+		return err
+	}
+
+	rBytes, err := ioutil.ReadAll(r)
+	if err != nil {
+		return err
+	}
+
+	resp, err := sendObjectRequest("PUT", "https://sisatech.storage.oraclecloud.com/v1/Storage-sisatech/compute_images/"+f+".tar.gz", rBytes, authCookie)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode > 204 {
+		return fmt.Errorf("bad status code %d", resp.StatusCode)
+	}
 
 	return nil
 }

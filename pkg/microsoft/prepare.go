@@ -103,14 +103,14 @@ type imageStruct struct {
 
 func sendRestRequest(authCookie string, verb string, url string, data interface{}) (*http.Response, error) {
 
-	var test bytes.Reader
-	body := &test
+	var b bytes.Reader
+	body := &b
 	if data != nil {
-		b, err := json.Marshal(data)
+		structBytes, err := json.Marshal(data)
 		if err != nil {
 			return nil, err
 		}
-		body = bytes.NewReader(b)
+		body = bytes.NewReader(structBytes)
 	}
 
 	req, err := http.NewRequest(verb, url, body)
