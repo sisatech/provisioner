@@ -417,8 +417,8 @@ func deleteDisk(p *Provisioner, name string) error {
 	return nil
 }
 
-func registerImage(svc *ec2.EC2, snapshotID *string) error {
-	svc.RegisterImage(&ec2.RegisterImageInput{
+func registerImage(svc *ec2.EC2, snapshotID *string, name string, description string) error {
+	rio, err := svc.RegisterImage(&ec2.RegisterImageInput{
 		RootDeviceName: aws.String("/dev/sda1"),
 		BlockDeviceMappings: []*ec2.BlockDeviceMapping{{
 			DeviceName: aws.String("/dev/sda1"),
@@ -426,9 +426,25 @@ func registerImage(svc *ec2.EC2, snapshotID *string) error {
 				SnapshotId: snapshotID,
 			}},
 		},
-		Name:               aws.String("snap-image1"),
+		Name:               aws.String(name),
 		VirtualizationType: aws.String("hvm"),
+		Description:        aws.String(description),
 	})
+
+	if err != nil {
+		return err
+	}
+
+	imageID := rio.ImageId
+
+	err = svc.WaitUntilImageAvailable(&ec2.DescribeImagesInput{
+		ImageIds: aws.StringSlice([]string{*imageID}),
+	})
+
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -606,7 +622,7 @@ func (p *Provisioner) Prepare(r io.ReadCloser, name, description string, overwri
 	// pt.IncrementProgress(1)
 
 	pt.SetStage("Regiestering image.")
-	err = registerImage(svc, snapshotID)
+	err = registerImage(svc, snapshotID, name, description)
 	if err != nil {
 		return err
 	}
