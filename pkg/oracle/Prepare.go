@@ -504,46 +504,68 @@ func checkMachineImageExists(p *Provisioner, machineName string, overwriteImage 
 	return nil
 }
 
-// func checkImageListExists(p *Provisioner, machineName string, overwriteImage bool) error {
+func deleteImageList(p *Provisioner, imageName string) error {
+	req, err := http.NewRequest("DELETE", "https://compute.aucom-east-1.oraclecloud.com/imagelist/Compute-590079687/joel.smith@sisa-tech.com/"+imageName, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Cookie", p.authCookie)
 
-// 	req, err := http.NewRequest("GET", "https://compute.aucom-east-1.oraclecloud.com/machineimage/Compute-590079687/joel.smith@sisa-tech.com/", nil)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	req.Header.Set("Cookie", p.authCookie)
-// 	req.Header.Set("Accept", "application/oracle-compute-v3+directory+json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
 
-// 	resp, err := http.DefaultClient.Do(req)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode > 204 {
+		return fmt.Errorf("bad status code %d", resp.StatusCode)
+	}
 
-// 	bodyBytes, _ := ioutil.ReadAll(resp.Body)
+	defer resp.Body.Close()
+	return nil
+}
 
-// 	j := make(map[string]interface{})
-// 	json.Unmarshal(bodyBytes, &j)
+func checkImageListExists(p *Provisioner, imageName string, overwriteImage bool) error {
 
-// 	r := j["result"].([]interface{})
+	req, err := http.NewRequest("GET", "https://compute.aucom-east-1.oraclecloud.com/imagelist/Compute-590079687/joel.smith@sisa-tech.com/", nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Cookie", p.authCookie)
+	req.Header.Set("Accept", "application/oracle-compute-v3+directory+json")
 
-// 	s := make([]string, len(r))
-// 	for i, v := range r {
-// 		s[i] = fmt.Sprint(v)
-// 		if s[i] == p.user+machineName {
-// 			if overwriteImage {
-// 				err = deleteMachineImage(p, machineName)
-// 				if err != nil {
-// 					return err
-// 				}
-// 				break
-// 			} else {
-// 				return fmt.Errorf("image %s already exists", machineName)
-// 			}
-// 		}
-// 	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
 
-// 	return nil
-// }
+	bodyBytes, _ := ioutil.ReadAll(resp.Body)
+
+	j := make(map[string]interface{})
+	json.Unmarshal(bodyBytes, &j)
+
+	r := j["result"].([]interface{})
+
+	fmt.Printf("r:\n%+v\n", r)
+
+	s := make([]string, len(r))
+	for i, v := range r {
+		s[i] = fmt.Sprint(v)
+		if s[i] == p.user+imageName {
+			if overwriteImage {
+				err = deleteImageList(p, imageName)
+				if err != nil {
+					return err
+				}
+				break
+			} else {
+				return fmt.Errorf("image %s already exists", imageName)
+			}
+		}
+	}
+
+	return nil
+}
 
 // Prepare ...
 func (p *Provisioner) Prepare(r io.ReadCloser, name string, overwriteImage bool) error {
@@ -591,10 +613,10 @@ func (p *Provisioner) Prepare(r io.ReadCloser, name string, overwriteImage bool)
 		return err
 	}
 
-	// err := checkImageListExists(p, name, overwriteImage)
-	// if err != nil {
-	// 	return err
-	// }
+	err = checkImageListExists(p, name, overwriteImage)
+	if err != nil {
+		return err
+	}
 
 	// err = createMachineImage(p, machineName, name)
 	// if err != nil {
