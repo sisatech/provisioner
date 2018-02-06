@@ -443,41 +443,107 @@ func launchOrchestration(p *Provisioner, orchestrationName string, instanceName 
 	return nil
 }
 
-func checkMachineImageExists(p *Provisioner) error {
-	fmt.Println("Checking if machine image exists...")
+func deleteMachineImage(p *Provisioner, machineName string) error {
+	req, err := http.NewRequest("DELETE", "https://compute.aucom-east-1.oraclecloud.com/machineimage/Compute-590079687/joel.smith@sisa-tech.com/"+machineName, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Cookie", p.authCookie)
 
-	// fmt.Printf("url: %s\n", p.cfg.EndPoint+"machineimage"+p.user)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode > 204 {
+		return fmt.Errorf("bad status code %d", resp.StatusCode)
+	}
+
+	defer resp.Body.Close()
+	return nil
+}
+
+func checkMachineImageExists(p *Provisioner, machineName string, overwriteImage bool) error {
 
 	req, err := http.NewRequest("GET", "https://compute.aucom-east-1.oraclecloud.com/machineimage/Compute-590079687/joel.smith@sisa-tech.com/", nil)
 	if err != nil {
-		// handle err
+		return err
 	}
 	req.Header.Set("Cookie", p.authCookie)
 	req.Header.Set("Accept", "application/oracle-compute-v3+directory+json")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		// handle err
+		return err
 	}
 	defer resp.Body.Close()
-
-	// resp, err := sendRestRequest("GET", p.cfg.EndPoint+"machineimage"+p.user, nil, p.authCookie)
-	// if err != nil {
-	// 	return err
-	// }
-
-	fmt.Printf("resp:\n%+v\n", resp)
 
 	bodyBytes, _ := ioutil.ReadAll(resp.Body)
 
 	j := make(map[string]interface{})
 	json.Unmarshal(bodyBytes, &j)
 
-	fmt.Printf("resp:\n%s\n", j)
+	r := j["result"].([]interface{})
 
-	// defer resp.Body.Close()
+	s := make([]string, len(r))
+	for i, v := range r {
+		s[i] = fmt.Sprint(v)
+		if s[i] == p.user+machineName {
+			if overwriteImage {
+				err = deleteMachineImage(p, machineName)
+				if err != nil {
+					return err
+				}
+				break
+			} else {
+				return fmt.Errorf("image %s already exists", machineName)
+			}
+		}
+	}
+
 	return nil
 }
+
+// func checkImageListExists(p *Provisioner, machineName string, overwriteImage bool) error {
+
+// 	req, err := http.NewRequest("GET", "https://compute.aucom-east-1.oraclecloud.com/machineimage/Compute-590079687/joel.smith@sisa-tech.com/", nil)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	req.Header.Set("Cookie", p.authCookie)
+// 	req.Header.Set("Accept", "application/oracle-compute-v3+directory+json")
+
+// 	resp, err := http.DefaultClient.Do(req)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	defer resp.Body.Close()
+
+// 	bodyBytes, _ := ioutil.ReadAll(resp.Body)
+
+// 	j := make(map[string]interface{})
+// 	json.Unmarshal(bodyBytes, &j)
+
+// 	r := j["result"].([]interface{})
+
+// 	s := make([]string, len(r))
+// 	for i, v := range r {
+// 		s[i] = fmt.Sprint(v)
+// 		if s[i] == p.user+machineName {
+// 			if overwriteImage {
+// 				err = deleteMachineImage(p, machineName)
+// 				if err != nil {
+// 					return err
+// 				}
+// 				break
+// 			} else {
+// 				return fmt.Errorf("image %s already exists", machineName)
+// 			}
+// 		}
+// 	}
+
+// 	return nil
+// }
 
 // Prepare ...
 func (p *Provisioner) Prepare(r io.ReadCloser, name string, overwriteImage bool) error {
@@ -495,8 +561,8 @@ func (p *Provisioner) Prepare(r io.ReadCloser, name string, overwriteImage bool)
 	// volumeName := strings.Split(imageZip, ".")[0] + "-vol" + hash[0:10]
 	// orchestrationName := "orchestration." + strings.Split(imageZip, ".")[0] + "-" + hash
 	// instanceName := strings.Split(imageZip, ".")[0] + "-" + hash
-	// machineName := name + ".machineImage-" // + hash
-	// imageListName := name + ".imageList-"  // + hash
+	// machineName := name
+	// imageListName := name
 
 	fmt.Printf("hash: %s\n", hash)
 
@@ -520,10 +586,15 @@ func (p *Provisioner) Prepare(r io.ReadCloser, name string, overwriteImage bool)
 	// 	return err
 	// }
 
-	err := checkMachineImageExists(p)
+	err := checkMachineImageExists(p, name, overwriteImage)
 	if err != nil {
 		return err
 	}
+
+	// err := checkImageListExists(p, name, overwriteImage)
+	// if err != nil {
+	// 	return err
+	// }
 
 	// err = createMachineImage(p, machineName, name)
 	// if err != nil {
