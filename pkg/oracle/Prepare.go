@@ -4,13 +4,11 @@ import (
 	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/sha1"
 	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
-	"os"
 	"time"
 
 	"golang.org/x/crypto/ssh"
@@ -111,7 +109,7 @@ type orchestrationStruct struct {
 }
 
 func authenticateCompute(p *Provisioner) (string, error) {
-	fmt.Printf("authenticate...\n")
+	// fmt.Printf("authenticate...\n")
 	user := "/Compute-" + p.cfg.ServerInstaceID + "/" + p.cfg.UserName + "/"
 	p.user = user
 
@@ -160,7 +158,7 @@ func sendRestRequest(verb string, url string, data interface{}, authCookie strin
 		return nil, err
 	}
 	defer resp.Body.Close()
-	fmt.Printf("res: %+v: %s\n", resp.StatusCode, resp.Status)
+	// fmt.Printf("res: %+v: %s\n", resp.StatusCode, resp.Status)
 
 	return resp, nil
 }
@@ -198,7 +196,7 @@ func addSSHKeys(p *Provisioner, keyName string) error {
 }
 
 func createSecurityLists(p *Provisioner, securityListName string) error {
-	fmt.Printf("createSecurityLists...\n")
+	// fmt.Printf("createSecurityLists...\n")
 
 	securityListsData := &securityListsStruct{
 		Policy:             "",
@@ -219,7 +217,7 @@ func createSecurityLists(p *Provisioner, securityListName string) error {
 }
 
 func reserveIPAddresses(p *Provisioner, ipName string) error {
-	fmt.Printf("reserveIPAddresses...\n")
+	// fmt.Printf("reserveIPAddresses...\n")
 	ipReservationsData := &iPRservationStruct{
 		Parentpool: "/oracle/public/ippool",
 		Permanent:  true,
@@ -237,19 +235,22 @@ func reserveIPAddresses(p *Provisioner, ipName string) error {
 	return nil
 }
 
-func createMachineImage(p *Provisioner, machineName string, fileName string) error {
-	fmt.Println("Creating machine image...")
+func createMachineImage(p *Provisioner, name string) error {
+	// fmt.Println("Creating machine image...")
 	machineImageData := &machineImageStruct{
 		Account:  "/Compute-" + p.cfg.ServerInstaceID + "/cloud_storage",
-		Name:     p.user + machineName,
+		Name:     p.user + name,
 		NoUpload: true,
-		File:     fileName + ".tar.gz",
+		File:     name + ".tar.gz",
 	}
 	machineImageData.Sizes.Total = 0
 
 	resp, err := sendRestRequest("POST", p.cfg.EndPoint+"machineimage/", machineImageData, p.authCookie)
 	if err != nil {
 		return err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode > 204 {
+		return fmt.Errorf("bad status code %d", resp.StatusCode)
 	}
 	defer resp.Body.Close()
 	return nil
@@ -264,17 +265,15 @@ func waitUntilMachineImageAvailable(p *Provisioner, machineName string) error {
 		req.Header.Set("Cookie", p.authCookie)
 		req.Header.Set("Accept", "application/oracle-compute-v3+json")
 
-		fmt.Println("Checking machine image status...")
+		// fmt.Println("Checking machine image status...")
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
-			fmt.Printf("Error: %s\n", err)
-			os.Exit(1)
+			return err
 		}
 		defer resp.Body.Close()
-		fmt.Printf("res: %+v: %s\n", resp.StatusCode, resp.Status)
 
 		if resp.StatusCode < 200 || resp.StatusCode > 204 {
-			return err
+			return fmt.Errorf("bad status code %d", resp.StatusCode)
 		}
 
 		bodyBytes, _ := ioutil.ReadAll(resp.Body)
@@ -290,40 +289,46 @@ func waitUntilMachineImageAvailable(p *Provisioner, machineName string) error {
 	return nil
 }
 
-func createImageList(p *Provisioner, imageListName string, hash string) error {
-	fmt.Println("Creating Image List...")
+func createImageList(p *Provisioner, name string) error {
+	// fmt.Println("Creating Image List...")
 	imageListData := &imageListStruct{
 		Default:     1,
-		Description: "imagelist-" + hash,
-		Name:        p.user + imageListName,
+		Description: "imagelist-" + name,
+		Name:        p.user + name,
 	}
 
 	resp, err := sendRestRequest("POST", p.cfg.EndPoint+"imagelist"+p.user, imageListData, p.authCookie)
 	if err != nil {
 		return err
 	}
+	if resp.StatusCode < 200 || resp.StatusCode > 204 {
+		return fmt.Errorf("bad status code %d", resp.StatusCode)
+	}
 	defer resp.Body.Close()
 	return nil
 }
 
-func createImageListEntry(p *Provisioner, imageListName string, machineName string) error {
-	fmt.Println("Creating Image List Entry...")
+func createImageListEntry(p *Provisioner, name string) error {
+	// fmt.Println("Creating Image List Entry...")
 	imageListEntryData := &imageListEntryStruct{
 		Version:       1,
-		Machineimages: []string{p.user + machineName},
+		Machineimages: []string{p.user + name},
 	}
 	imageListEntryData.Attributes.Type = "Vorteil"
 
-	resp, err := sendRestRequest("POST", p.cfg.EndPoint+"imagelist"+p.user+imageListName+"/entry", imageListEntryData, p.authCookie)
+	resp, err := sendRestRequest("POST", p.cfg.EndPoint+"imagelist"+p.user+name+"/entry", imageListEntryData, p.authCookie)
 	if err != nil {
 		return err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode > 204 {
+		return fmt.Errorf("bad status code %d", resp.StatusCode)
 	}
 	defer resp.Body.Close()
 	return nil
 }
 
 func createBootableStorageVolume(p *Provisioner, volumeName string, imageListName string) error {
-	fmt.Println("Creating Bootable Storage Volume...")
+	// fmt.Println("Creating Bootable Storage Volume...")
 	bootableVolumeData := &bootableVolumeStruct{
 		Size:           "10G",
 		Properties:     []string{"/oracle/public/storage/default"},
@@ -335,42 +340,35 @@ func createBootableStorageVolume(p *Provisioner, volumeName string, imageListNam
 
 	resp, err := sendRestRequest("POST", p.cfg.EndPoint+"storage/volume/", bootableVolumeData, p.authCookie)
 	if err != nil {
-		fmt.Printf("Error: %s\n", err)
-		os.Exit(1)
+		return err
 	}
 	defer resp.Body.Close()
-	fmt.Printf("res: %+v: %s\n", resp.StatusCode, resp.Status)
 
 	if resp.StatusCode < 200 || resp.StatusCode > 204 {
-		return err
+		return fmt.Errorf("bad status code %d", resp.StatusCode)
 	}
 
 	return nil
 }
 
 func waitUntilBootableStorageVolumeOnline(p *Provisioner, volumeName string) error {
-	fmt.Println("Waiting for Bootable Storage Volume to be created...")
+	// fmt.Println("Waiting for Bootable Storage Volume to be created...")
 	for {
 		req, err := http.NewRequest("GET", p.cfg.EndPoint+"storage/volume"+p.user+volumeName, nil)
 		if err != nil {
-			fmt.Printf("Error: %s\n", err)
-			os.Exit(1)
+			return err
 		}
 		req.Header.Set("Cookie", p.authCookie)
 		req.Header.Set("Accept", "application/oracle-compute-v3+json")
 
-		fmt.Println("Checking storage volume status...")
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
-			fmt.Printf("Error: %s\n", err)
-			os.Exit(1)
+			return err
 		}
 		defer resp.Body.Close()
-		fmt.Printf("res: %+v: %s\n", resp.StatusCode, resp.Status)
 
 		if resp.StatusCode < 200 || resp.StatusCode > 204 {
-			fmt.Printf("Bad StatusCode\n")
-			os.Exit(1)
+			return fmt.Errorf("bad status code %d", resp.StatusCode)
 		}
 
 		bodyBytes, _ := ioutil.ReadAll(resp.Body)
@@ -387,7 +385,7 @@ func waitUntilBootableStorageVolumeOnline(p *Provisioner, volumeName string) err
 }
 
 func launchOrchestration(p *Provisioner, orchestrationName string, instanceName string, keyName string, imageListName string, volumeName string, ipName string) error {
-	fmt.Println("Launching Orchestration...")
+	// fmt.Println("Launching Orchestration...")
 	eth0Data := eth0Struct{
 		Nat: "ipreservation:" + p.user + ipName,
 	}
@@ -428,14 +426,10 @@ func launchOrchestration(p *Provisioner, orchestrationName string, instanceName 
 
 	resp, err := sendRestRequest("POST", p.cfg.EndPoint+"platform/v1/orchestration/", orchestrationData, p.authCookie)
 
-	fmt.Printf("resp:\n%+v\n", resp)
-
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
-
-	fmt.Printf("res: %+v: %s\n", resp.StatusCode, resp.Status)
 
 	if resp.StatusCode < 200 || resp.StatusCode > 204 {
 		return fmt.Errorf("bad status code %d", resp.StatusCode)
@@ -546,8 +540,6 @@ func checkImageListExists(p *Provisioner, imageName string, overwriteImage bool)
 
 	r := j["result"].([]interface{})
 
-	fmt.Printf("r:\n%+v\n", r)
-
 	s := make([]string, len(r))
 	for i, v := range r {
 		s[i] = fmt.Sprint(v)
@@ -570,28 +562,20 @@ func checkImageListExists(p *Provisioner, imageName string, overwriteImage bool)
 // Prepare ...
 func (p *Provisioner) Prepare(r io.ReadCloser, name string, overwriteImage bool) error {
 
-	h := sha1.New()
-	h.Write([]byte(time.Now().String()))
-	hash := fmt.Sprintf("%x", h.Sum(nil))
+	err := checkMachineImageExists(p, name, overwriteImage)
+	if err != nil {
+		return err
+	}
 
-	// imageZip := "vcli.raw.tar.gz"
-	// keyName := "key-" + hash
-	// securityName := "allowed." + strings.Split(imageZip, ".")[0] + "-" + hash
-	// ipName := "ip." + strings.Split(imageZip, ".")[0] + "-" + hash
-	// machineName := strings.Split(imageZip, ".")[0] + ".machineImage-" + hash
-	// imageListName := strings.Split(imageZip, ".")[0] + ".imageList-" + hash
-	// volumeName := strings.Split(imageZip, ".")[0] + "-vol" + hash[0:10]
-	// orchestrationName := "orchestration." + strings.Split(imageZip, ".")[0] + "-" + hash
-	// instanceName := strings.Split(imageZip, ".")[0] + "-" + hash
-	// machineName := name
-	// imageListName := name
+	err = checkImageListExists(p, name, overwriteImage)
+	if err != nil {
+		return err
+	}
 
-	fmt.Printf("hash: %s\n", hash)
-
-	// err := p.Provision(name, r)
-	// if err != nil {
-	// 	return err
-	// }
+	err = p.Provision(name, r)
+	if err != nil {
+		return err
+	}
 
 	// err := addSSHKeys(p, keyName)
 	// if err != nil {
@@ -608,40 +592,35 @@ func (p *Provisioner) Prepare(r io.ReadCloser, name string, overwriteImage bool)
 	// 	return err
 	// }
 
-	err := checkMachineImageExists(p, name, overwriteImage)
+	err = createMachineImage(p, name)
 	if err != nil {
 		return err
 	}
 
-	err = checkImageListExists(p, name, overwriteImage)
+	err = waitUntilMachineImageAvailable(p, name)
 	if err != nil {
 		return err
 	}
 
-	// err = createMachineImage(p, machineName, name)
-	// if err != nil {
-	// 	return err
-	// }
+	err = createImageList(p, name)
+	if err != nil {
+		return err
+	}
 
-	// err = waitUntilMachineImageAvailable(p, machineName)
-	// if err != nil {
-	// 	return err
-	// }
+	err = createImageListEntry(p, name)
+	if err != nil {
+		return err
+	}
 
-	// err = createImageList(p, imageListName, hash)
-	// if err != nil {
-	// 	return err
-	// }
+	err = deleteObject(name)
+	if err != nil {
+		return err
+	}
 
-	// err = createImageListEntry(p, imageListName, machineName)
-	// if err != nil {
-	// 	return err
-	// }
-
-	// err = deleteObject(name)
-	// if err != nil {
-	// 	return err
-	// }
+	err = deleteMachineImage(p, name)
+	if err != nil {
+		return err
+	}
 
 	// err = createBootableStorageVolume(p, volumeName, imageListName)
 	// if err != nil {

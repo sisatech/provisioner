@@ -37,7 +37,7 @@ func sendObjectRequest(verb string, url string, data interface{}, authCookie str
 		return nil, err
 	}
 	defer resp.Body.Close()
-	fmt.Printf("res: %+v: %s\n", resp.StatusCode, resp.Status)
+	// fmt.Printf("res: %+v: %s\n", resp.StatusCode, resp.Status)
 
 	return resp, nil
 }
@@ -95,7 +95,7 @@ func deleteObject(onjectName string) error {
 
 // Provision ...
 func (p *Provisioner) Provision(f string, r io.ReadCloser) error {
-	fmt.Printf("Provision...\n")
+	// fmt.Printf("Provision...\n")
 
 	// delete the object if it already exists
 	err := deleteObject(f)
