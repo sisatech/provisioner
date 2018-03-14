@@ -473,6 +473,10 @@ func uploadAndImport(svc *ec2.EC2, p *Provisioner, r io.ReadCloser, name string,
 // Prepare creates an AMI from a ReadCloser r and names it name
 func (p *Provisioner) Prepare(r io.ReadCloser, name, description string, overwriteImage bool, pt progress.ProgressTracker) error {
 
+	if len(description) > 255 {
+		description = description[:255]
+	}
+
 	pt.Initialize("Provisioning Virtual Machine Image.", 105, progress.UnitStep)
 
 	pt.SetStage("Authenticating with Amazon servers.")
